@@ -1,0 +1,8 @@
+{
+  "name": "werkstatt",
+  "version": "0.1.0",
+  "description": "Werkzeuge für agentische Softwareentwicklung: Specs, Akzeptanztests, Implementierungs-Schleife und Review.",
+  "author": {
+    "name": "Niklas Enns"
+  }
+}

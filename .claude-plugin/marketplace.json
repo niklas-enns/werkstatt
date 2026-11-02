@@ -1,0 +1,14 @@
+{
+  "name": "werkstatt-local",
+  "description": "Lokaler Marktplatz für die werkstatt",
+  "owner": {
+    "name": "Niklas Enns"
+  },
+  "plugins": [
+    {
+      "name": "werkstatt",
+      "source": "./",
+      "description": "Werkzeuge für agentische Softwareentwicklung"
+    }
+  ]
+}

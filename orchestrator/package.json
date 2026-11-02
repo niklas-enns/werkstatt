@@ -1,0 +1,24 @@
+{
+  "name": "werkstatt-orchestrator",
+  "version": "0.1.0",
+  "description": "Führt eine freigegebene Spec ohne Zutun durch: Akzeptanztests ableiten, implementieren, prüfen, reviewen.",
+  "type": "module",
+  "bin": {
+    "werkstatt": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.316"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
