@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import type { Project, Spec } from "./project.js";
 import { builder, log, reviewer, runSession, type SessionOptions, type SessionResult } from "./session.js";
@@ -6,6 +6,15 @@ import { builder, log, reviewer, runSession, type SessionOptions, type SessionRe
 export interface RunOptions extends SessionOptions {
   maxAttempts: number;
   allowDirty: boolean;
+  /** Asks the user about open questions from a passed review; absent when nobody can answer. */
+  decide?: (questions: string[]) => Promise<Decision[]>;
+}
+
+export interface Decision {
+  question: string;
+  kind: "bestätigt" | "geändert" | "später";
+  /** The user's decision, for kind "geändert". */
+  text?: string;
 }
 
 interface Phase {
@@ -41,7 +50,12 @@ const REVIEW_SCHEMA = {
         },
       },
     },
-    questions: { type: "array", items: { type: "string" }, description: "Punkte, die die Spec offen lässt und der Nutzer entscheiden muss" },
+    questions: {
+      type: "array",
+      items: { type: "string" },
+      description: "Punkte, die die Spec offen lässt und der Nutzer entscheiden muss. Jede Frage für sich verständlich: " +
+        "was die Spec offen lässt, wie es jetzt umgesetzt ist, welche Alternative es gäbe.",
+    },
   },
 };
 
@@ -54,6 +68,8 @@ export interface RunRecord {
   phases: Phase[];
   costUsd: number;
   changedFiles: string[];
+  decisions: Decision[];
+  openQuestions: string[];
 }
 
 /**
@@ -64,7 +80,7 @@ export interface RunRecord {
 export async function run(project: Project, specId: string, options: RunOptions): Promise<RunRecord> {
   const spec = project.spec(specId);
   const record: RunRecord = {
-    spec: spec.id, startedAt: new Date().toISOString(), outcome: "abgebrochen", reason: "", phases: [], costUsd: 0, changedFiles: [],
+    spec: spec.id, startedAt: new Date().toISOString(), outcome: "abgebrochen", reason: "", phases: [], costUsd: 0, changedFiles: [], decisions: [], openQuestions: [],
   };
   const finish = (outcome: RunRecord["outcome"], reason: string) => {
     record.outcome = outcome;
@@ -112,10 +128,12 @@ export async function run(project: Project, specId: string, options: RunOptions)
   const before = project.verify();
   if (before.ok) log("run", "verify ist bereits grün – die Tests prüfen evtl. zu wenig, oder die Spec ist schon umgesetzt.");
 
-  // Phase 2+3: implement, check, review – retried with the findings as feedback
+  // Phase 2+3: implement, check, review – retried with the findings as feedback.
+  // The user's answers to open review questions may add one more round.
   let feedback = "";
-  for (let attempt = 1; attempt <= options.maxAttempts; attempt++) {
-    const of = `${attempt}/${options.maxAttempts}`;
+  let limit = options.maxAttempts;
+  for (let attempt = 1; attempt <= limit; attempt++) {
+    const of = `${attempt}/${limit}`;
     const session = await runSession(project, `impl ${of}`, implementPrompt(project, spec, feedback), builder(project, "implement"), options);
     const phase: Phase = { name: `implement-${attempt}`, session, verdict: "failed", note: "" };
     record.phases.push(phase);
@@ -149,15 +167,49 @@ export async function run(project: Project, specId: string, options: RunOptions)
       return finish("gescheitert", `Der Reviewer hat kein Urteil geliefert (Session: ${reviewSession.outcome}). Text: ${file}`);
     }
     if (review.verdict === "BESTANDEN") {
-      const open = review.questions.length ? ` ${review.questions.length} offene Frage(n) an dich, siehe ${file}` : "";
-      return finish("freigegeben", `Spec ${spec.id} umgesetzt, verify grün, Review bestanden.${open}`);
+      record.openQuestions = review.questions;
+      if (review.questions.length && options.decide && !record.decisions.length) {
+        const decisions = await options.decide(review.questions);
+        record.decisions = decisions;
+        record.openQuestions = decisions.filter((d) => d.kind === "später").map((d) => d.question);
+        addDecisionsToSpec(project, spec, decisions);
+        const changes = decisions.filter((d) => d.kind === "geändert");
+        if (changes.length) {
+          limit = attempt + 1;
+          feedback = "Der Nutzer hat offene Fragen entschieden (siehe Abschnitt „Entscheidungen“ der Spec). " +
+            "Passe die Umsetzung daran an:\n\n" + changes.map((d) => `- ${d.question}\n  Entscheidung: ${d.text}`).join("\n");
+          log("run", `${changes.length} Entscheidung(en) erfordern eine weitere Runde.`);
+          continue;
+        }
+      }
+      return finish("freigegeben", `Spec ${spec.id} umgesetzt, verify grün, Review bestanden. Review: ${file}`);
     }
     log("run", `Versuch ${attempt}: Review verlangt Nachbesserung.`);
     const blocking = review.findings.filter((f) => f.blocking);
     feedback = "Das Review verlangt Nachbesserungen:\n\n" +
       blocking.map((f) => `- ${f.location} (${f.reference}): ${f.problem}`).join("\n");
   }
-  return finish("gescheitert", `Nach ${options.maxAttempts} Versuchen nicht freigegeben.\n\n${feedback}`);
+  return finish("gescheitert", `Nach ${limit} Versuchen nicht freigegeben.\n\n${feedback}`);
+}
+
+/** Records the user's decisions in the spec, so later reviews don't raise them again. */
+export function addDecisionsToSpec(project: Project, spec: Spec, decisions: Decision[]) {
+  const decided = decisions.filter((d) => d.kind !== "später");
+  if (!decided.length) return;
+  const date = new Date().toISOString().slice(0, 10);
+  const lines = decided.map((d) =>
+    `- ${d.question}\n  **Entscheidung (${date}):** ${d.kind === "bestätigt" ? "So, wie umgesetzt." : d.text}`).join("\n");
+  const path = join(project.root, spec.path);
+  const text = readFileSync(path, "utf8").trimEnd();
+  const heading = "## Entscheidungen";
+  const at = text.indexOf(`\n${heading}\n`);
+  if (at < 0) {
+    writeFileSync(path, `${text}\n\n${heading}\n\n${lines}\n`);
+    return;
+  }
+  const next = text.indexOf("\n## ", at + heading.length + 1);
+  const end = next < 0 ? text.length : next;
+  writeFileSync(path, `${text.slice(0, end).trimEnd()}\n${lines}\n${text.slice(end)}\n`);
 }
 
 function implementPrompt(project: Project, spec: Spec, feedback: string): string {
@@ -170,7 +222,7 @@ ${tests}
 Halte dich an AGENTS.md. Setze nur um, was die Spec verlangt. Ändere keine Akzeptanztests.
 Du bist erst fertig, wenn \`${project.config.commands.verify}\` grün ist. Danach prüft ein
 unabhängiges Review deine Änderung gegen die Spec.
-${feedback ? `\nEin vorheriger Versuch ist nicht abgeschlossen worden. Befund:\n\n${feedback}\n` : ""}`;
+${feedback ? `\nDer bisherige Stand ist noch nicht abgenommen. Rückmeldung:\n\n${feedback}\n` : ""}`;
 }
 
 function reviewPrompt(project: Project, spec: Spec, base: string): string {

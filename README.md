@@ -65,6 +65,10 @@ in einer eigenen Agent-Session mit frischem Kontext:
 4. **Review**: eigene Session mit dem Agent `werkstatt:reviewer` – nur lesende Werkzeuge,
    Maßstab sind Spec und `AGENTS.md`. Bei `NACHBESSERN` geht es mit den Befunden zurück
    zu Schritt 3, bis `--attempts` (Standard 2) erreicht ist.
+   Ist das Review bestanden, lässt aber Fragen offen, die die Spec nicht regelt, fragt der
+   Orchestrator im Terminal nach: **so lassen**, **anders entscheiden** oder **später**.
+   Entscheidungen werden im Abschnitt „Entscheidungen“ der Spec festgehalten; eine
+   geänderte Entscheidung löst eine weitere Runde aus Implementierung und Review aus.
 5. **Protokoll** nach `.werkstatt/state/runs/` – Phasen, Kosten, Turns, Ergebnis als JSON,
    jedes Review zusätzlich als lesbare Markdown-Datei (`…-review-<Versuch>.md`).
 

@@ -44,3 +44,6 @@ Akzeptanztests dagegen geschrieben werden können. Z. B. für HTTP:>
 ## Offene Fragen
 
 - <Was der Nutzer noch entscheiden muss; leer, wenn nichts offen ist>
+
+<!-- Der Abschnitt "## Entscheidungen" wird von `werkstatt run` angehängt, wenn der
+     Nutzer offene Fragen aus dem Review beantwortet. Nicht von Hand anlegen. -->

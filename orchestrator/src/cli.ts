@@ -1,7 +1,8 @@
 #!/usr/bin/env node
+import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
 import { Project } from "./project.js";
-import { run } from "./run.js";
+import { run, type Decision } from "./run.js";
 
 const USAGE = `Aufruf: werkstatt run <Spec-ID> [Optionen]
 
@@ -43,6 +44,7 @@ async function main() {
     maxTurns: values["max-turns"] ? Number(values["max-turns"]) : undefined,
     model: values.model,
     allowDirty: values["allow-dirty"],
+    decide: process.stdin.isTTY ? askUser : undefined,
   });
 
   console.log(`\n=== Spec ${record.spec}: ${record.outcome.toUpperCase()} ===`);
@@ -52,11 +54,39 @@ async function main() {
     const cost = phase.session ? ` ($${phase.session.costUsd.toFixed(2)}, ${phase.session.turns} Turns)` : "";
     console.log(`  ${phase.name}: ${phase.verdict}${cost}`);
   }
+  const decided = record.decisions.filter((d) => d.kind !== "später");
+  if (decided.length) console.log(`\n${decided.length} Entscheidung(en) in ${project.spec(record.spec).path} festgehalten.`);
+  if (record.openQuestions.length) {
+    console.log("\nOffene Fragen an dich:");
+    record.openQuestions.forEach((q, i) => console.log(`  ${i + 1}. ${q}`));
+  }
   if (record.changedFiles.length) {
     console.log(`\nGeänderte Dateien:\n${record.changedFiles.join("\n")}`);
     if (record.outcome === "freigegeben") console.log("\nNächster Schritt: Diff ansehen und committen.");
   }
   process.exit(record.outcome === "freigegeben" ? 0 : 1);
+}
+
+async function askUser(questions: string[]): Promise<Decision[]> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  console.log(`\nDas Review ist bestanden, lässt aber ${questions.length} Frage(n) offen, die die Spec nicht regelt.`);
+  const decisions: Decision[] = [];
+  for (const [i, question] of questions.entries()) {
+    console.log(`\nFrage ${i + 1}/${questions.length}: ${question}`);
+    let choice = "";
+    while (!["a", "e", "s"].includes(choice)) {
+      choice = (await rl.question("  [a] so lassen, wie umgesetzt   [e] anders entscheiden   [s] später > ")).trim().toLowerCase();
+    }
+    if (choice === "a") decisions.push({ question, kind: "bestätigt" });
+    if (choice === "s") decisions.push({ question, kind: "später" });
+    if (choice === "e") {
+      let text = "";
+      while (!text) text = (await rl.question("  Deine Entscheidung: ")).trim();
+      decisions.push({ question, kind: "geändert", text });
+    }
+  }
+  rl.close();
+  return decisions;
 }
 
 main().catch((error) => {

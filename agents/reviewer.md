@@ -49,5 +49,8 @@ Gib dein Ergebnis in der vorgegebenen strukturierten Form ab:
   Abschnitt der `AGENTS.md`), Problem samt Erwartung und ob er eine Nachbesserung
   erfordert (`blocking`). Hinweise ohne Handlungsbedarf mit `blocking: false`.
 - **questions**: Punkte, die die Spec offen lässt und die der Nutzer entscheiden muss.
-  Eine offene Frage ist kein Grund für `NACHBESSERN`, solange die Umsetzung eine
-  vertretbare Auslegung ist.
+  Der Nutzer sieht jede Frage einzeln im Terminal, ohne dein Review – formuliere sie
+  deshalb für sich verständlich: was die Spec offen lässt, wie es jetzt umgesetzt ist,
+  welche Alternative es gäbe. Fragen, die im Abschnitt „Entscheidungen“ der Spec schon
+  beantwortet sind, stellst du nicht erneut. Eine offene Frage ist kein Grund für
+  `NACHBESSERN`, solange die Umsetzung eine vertretbare Auslegung ist.
