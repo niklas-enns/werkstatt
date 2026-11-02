@@ -65,7 +65,8 @@ in einer eigenen Agent-Session mit frischem Kontext:
 4. **Review**: eigene Session mit dem Agent `werkstatt:reviewer` – nur lesende Werkzeuge,
    Maßstab sind Spec und `AGENTS.md`. Bei `NACHBESSERN` geht es mit den Befunden zurück
    zu Schritt 3, bis `--attempts` (Standard 2) erreicht ist.
-5. **Protokoll** nach `.werkstatt/state/runs/` – Phasen, Kosten, Turns, Review-Text, Ergebnis.
+5. **Protokoll** nach `.werkstatt/state/runs/` – Phasen, Kosten, Turns, Ergebnis als JSON,
+   jedes Review zusätzlich als lesbare Markdown-Datei (`…-review-<Versuch>.md`).
 
 Der Orchestrator committet nicht. Die Sessions laufen ohne Rückfragen (`dontAsk`): erlaubt
 sind Dateiwerkzeuge, Subagents, der Prüfbefehl und lesende Shell-/git-Befehle, alles

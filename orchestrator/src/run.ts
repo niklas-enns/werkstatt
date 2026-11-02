@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import type { Project, Spec } from "./project.js";
 import { builder, log, reviewer, runSession, type SessionOptions, type SessionResult } from "./session.js";
 
@@ -14,6 +14,36 @@ interface Phase {
   verdict: "ok" | "failed" | "skipped";
   note: string;
 }
+
+interface Review {
+  verdict: "BESTANDEN" | "NACHBESSERN";
+  summary: string;
+  findings: { location: string; reference: string; problem: string; blocking: boolean }[];
+  questions: string[];
+}
+
+const REVIEW_SCHEMA = {
+  type: "object",
+  required: ["verdict", "summary", "findings", "questions"],
+  properties: {
+    verdict: { type: "string", enum: ["BESTANDEN", "NACHBESSERN"] },
+    summary: { type: "string", description: "Gesamteinschätzung in wenigen Sätzen" },
+    findings: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["location", "reference", "problem", "blocking"],
+        properties: {
+          location: { type: "string", description: "Datei:Zeile" },
+          reference: { type: "string", description: "AK-ID, Regel der Spec oder Abschnitt der AGENTS.md" },
+          problem: { type: "string", description: "Problem und was stattdessen erwartet wird" },
+          blocking: { type: "boolean", description: "true, wenn eine Nachbesserung nötig ist" },
+        },
+      },
+    },
+    questions: { type: "array", items: { type: "string" }, description: "Punkte, die die Spec offen lässt und der Nutzer entscheiden muss" },
+  },
+};
 
 export interface RunRecord {
   spec: string;
@@ -108,19 +138,24 @@ export async function run(project: Project, specId: string, options: RunOptions)
     phase.verdict = "ok";
     phase.note = "verify grün, Akzeptanztests unverändert.";
 
-    const review = await runSession(project, `review ${of}`, reviewPrompt(project, spec, base), reviewer(), options);
-    const verdict = /URTEIL:\s*(BESTANDEN|NACHBESSERN)/i.exec(review.finalText)?.[1].toUpperCase();
+    const reviewSession = await runSession(project, `review ${of}`, reviewPrompt(project, spec, base), reviewer(REVIEW_SCHEMA), options);
+    const review = reviewSession.structured as Review | undefined;
+    const report = review ? formatReview(spec, attempt, review) : reviewSession.finalText;
+    const file = saveReview(project, record, attempt, report);
     record.phases.push({
-      name: `review-${attempt}`, session: review, verdict: verdict === "BESTANDEN" ? "ok" : "failed", note: review.finalText,
+      name: `review-${attempt}`, session: reviewSession, verdict: review?.verdict === "BESTANDEN" ? "ok" : "failed", note: file,
     });
-    if (verdict === "BESTANDEN") {
-      return finish("freigegeben", `Spec ${spec.id} umgesetzt, verify grün, Review bestanden.`);
+    if (!review) {
+      return finish("gescheitert", `Der Reviewer hat kein Urteil geliefert (Session: ${reviewSession.outcome}). Text: ${file}`);
     }
-    if (!verdict) {
-      return finish("gescheitert", `Der Reviewer hat kein Urteil geliefert (Session: ${review.outcome}).`);
+    if (review.verdict === "BESTANDEN") {
+      const open = review.questions.length ? ` ${review.questions.length} offene Frage(n) an dich, siehe ${file}` : "";
+      return finish("freigegeben", `Spec ${spec.id} umgesetzt, verify grün, Review bestanden.${open}`);
     }
     log("run", `Versuch ${attempt}: Review verlangt Nachbesserung.`);
-    feedback = `Das Review verlangt Nachbesserungen:\n\n${review.finalText}`;
+    const blocking = review.findings.filter((f) => f.blocking);
+    feedback = "Das Review verlangt Nachbesserungen:\n\n" +
+      blocking.map((f) => `- ${f.location} (${f.reference}): ${f.problem}`).join("\n");
   }
   return finish("gescheitert", `Nach ${options.maxAttempts} Versuchen nicht freigegeben.\n\n${feedback}`);
 }
@@ -149,11 +184,44 @@ ${changed}
 \`${project.config.commands.verify}\` ist grün, die Akzeptanztests sind unverändert.`;
 }
 
-function save(project: Project, record: RunRecord) {
+function formatReview(spec: Spec, attempt: number, review: Review): string {
+  const findings = (blocking: boolean) =>
+    review.findings.filter((f) => f.blocking === blocking)
+      .map((f) => `- **${f.location}** (${f.reference}): ${f.problem}`).join("\n") || "- keine";
+  return `# Review Spec ${spec.id}, Versuch ${attempt}: ${review.verdict}
+
+${review.summary}
+
+## Befunde, die eine Nachbesserung erfordern
+${findings(true)}
+
+## Hinweise
+${findings(false)}
+
+## Offene Fragen an den Nutzer
+${review.questions.map((q) => `- ${q}`).join("\n") || "- keine"}
+`;
+}
+
+function runsDir(project: Project): string {
   const state = join(project.root, ".werkstatt", "state");
   const dir = join(state, "runs");
   mkdirSync(dir, { recursive: true });
   if (!existsSync(join(state, ".gitignore"))) writeFileSync(join(state, ".gitignore"), "*\n");
-  const name = `${record.startedAt.replace(/[:.]/g, "-")}-spec${record.spec}.json`;
-  writeFileSync(join(dir, name), JSON.stringify(record, null, 2) + "\n");
+  return dir;
+}
+
+function runName(record: RunRecord): string {
+  return `${record.startedAt.replace(/[:.]/g, "-")}-spec${record.spec}`;
+}
+
+/** Writes the review as Markdown next to the run record; returns its path relative to the project. */
+function saveReview(project: Project, record: RunRecord, attempt: number, report: string): string {
+  const path = join(runsDir(project), `${runName(record)}-review-${attempt}.md`);
+  writeFileSync(path, report);
+  return relative(project.root, path);
+}
+
+function save(project: Project, record: RunRecord) {
+  writeFileSync(join(runsDir(project), `${runName(record)}.json`), JSON.stringify(record, null, 2) + "\n");
 }

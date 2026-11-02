@@ -14,6 +14,8 @@ export interface Role {
   tools: string[];
   /** Value of WERKSTATT_PHASE, read by the stop hook. */
   phase?: string;
+  /** JSON schema the session's final answer must match. */
+  outputSchema?: Record<string, unknown>;
 }
 
 export interface SessionResult {
@@ -23,6 +25,7 @@ export interface SessionResult {
   turns: number;
   durationMs: number;
   finalText: string;
+  structured?: unknown;
 }
 
 const READ_ONLY = [
@@ -31,8 +34,8 @@ const READ_ONLY = [
   "Bash(ls *)", "Bash(cat *)", "Bash(find *)", "Bash(grep *)", "Bash(head *)", "Bash(tail *)",
 ];
 
-export function reviewer(): Role {
-  return { agent: "werkstatt:reviewer", tools: READ_ONLY };
+export function reviewer(outputSchema: Record<string, unknown>): Role {
+  return { agent: "werkstatt:reviewer", tools: READ_ONLY, outputSchema };
 }
 
 /** File tools, subagents, the verify command and its build tool, plus read-only shell. */
@@ -71,6 +74,7 @@ export async function runSession(
     maxBudgetUsd: options.maxBudgetUsd,
     maxTurns: options.maxTurns,
   };
+  if (role.outputSchema) sdkOptions.outputFormat = { type: "json_schema", schema: role.outputSchema };
   if (role.agent) sdkOptions.agent = role.agent;
   else sdkOptions.systemPrompt = { type: "preset", preset: "claude_code", append: UNATTENDED };
 
@@ -84,6 +88,7 @@ export async function runSession(
         turns: message.num_turns,
         durationMs: Date.now() - started,
         finalText: message.subtype === "success" ? message.result : "",
+        structured: message.subtype === "success" ? message.structured_output : undefined,
       };
     }
   }
