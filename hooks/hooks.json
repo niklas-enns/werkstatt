@@ -1,13 +1,6 @@
 {
-  "description": "werkstatt: Akzeptanztests schützen, verify und Review vor dem Abschluss erzwingen",
+  "description": "werkstatt: Akzeptanztests schützen; im Orchestrator verify vor dem Abschluss erzwingen",
   "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/werkstatt.py\" session-start", "timeout": 30 }
-        ]
-      }
-    ],
     "PreToolUse": [
       {
         "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
@@ -20,13 +13,6 @@
       {
         "hooks": [
           { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/werkstatt.py\" stop", "timeout": 600 }
-        ]
-      }
-    ],
-    "SubagentStop": [
-      {
-        "hooks": [
-          { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/werkstatt.py\" subagent-stop", "timeout": 10 }
         ]
       }
     ]

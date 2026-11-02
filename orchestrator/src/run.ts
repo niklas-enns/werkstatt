@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Project, Spec } from "./project.js";
-import { log, runSession, type SessionOptions, type SessionResult } from "./session.js";
+import { builder, log, reviewer, runSession, type SessionOptions, type SessionResult } from "./session.js";
 
 export interface RunOptions extends SessionOptions {
   maxAttempts: number;
@@ -27,8 +27,8 @@ export interface RunRecord {
 }
 
 /**
- * Runs one approved spec end to end. Each phase is a fresh agent session, so the
- * implementing agent never sees the reasoning of the one that wrote the tests.
+ * Runs one approved spec end to end: tests → (implement → verify → review)*.
+ * Each phase is a fresh agent session, so no agent sees the reasoning of another.
  * The orchestrator checks every outcome itself instead of trusting the agent's report.
  */
 export async function run(project: Project, specId: string, options: RunOptions): Promise<RunRecord> {
@@ -55,16 +55,14 @@ export async function run(project: Project, specId: string, options: RunOptions)
     return finish("abgebrochen", "Uncommittete Änderungen – erst committen, damit die Änderungen des Laufs eindeutig sind " +
       `(oder --allow-dirty):\n${dirty.join("\n")}`);
   }
-  if (project.gate().paused) {
-    return finish("abgebrochen", "Das Stop-Gate ist pausiert – ohne Gate prüft niemand verify und Review.");
-  }
+  const base = project.head();
   log("run", `Spec ${spec.id} – ${spec.title}`);
 
   // Phase 1: acceptance tests
   if (project.acceptanceTests(spec).length) {
     record.phases.push({ name: "tests", verdict: "skipped", note: "Akzeptanztests vorhanden." });
   } else {
-    const session = await runSession(project, "tests", `/werkstatt:derive-tests ${spec.id}`, options);
+    const session = await runSession(project, "tests", `/werkstatt:derive-tests ${spec.id}`, builder(project), options);
     const tests = project.acceptanceTests(spec);
     const phase: Phase = { name: "tests", session, verdict: "ok", note: "" };
     record.phases.push(phase);
@@ -73,7 +71,7 @@ export async function run(project: Project, specId: string, options: RunOptions)
       phase.note = session.finalText;
       return finish("abgebrochen", `Keine Akzeptanztests für Spec ${spec.id} entstanden.\n\n${session.finalText}`);
     }
-    const unlocked = tests.filter((t) => !project.gate().locked.includes(t));
+    const unlocked = tests.filter((t) => !project.locks().locked.includes(t));
     phase.note = `${tests.length} Testdatei(en)` + (unlocked.length ? `, NICHT gesperrt: ${unlocked.join(", ")}` : ", gesperrt.");
     if (unlocked.length) {
       phase.verdict = "failed";
@@ -84,33 +82,45 @@ export async function run(project: Project, specId: string, options: RunOptions)
   const before = project.verify();
   if (before.ok) log("run", "verify ist bereits grün – die Tests prüfen evtl. zu wenig, oder die Spec ist schon umgesetzt.");
 
-  // Phase 2: implementation, retried with the orchestrator's own findings as feedback
+  // Phase 2+3: implement, check, review – retried with the findings as feedback
   let feedback = "";
   for (let attempt = 1; attempt <= options.maxAttempts; attempt++) {
-    const label = `impl ${attempt}/${options.maxAttempts}`;
-    const session = await runSession(project, label, implementPrompt(project, spec, feedback), options);
+    const of = `${attempt}/${options.maxAttempts}`;
+    const session = await runSession(project, `impl ${of}`, implementPrompt(project, spec, feedback), builder(project, "implement"), options);
     const phase: Phase = { name: `implement-${attempt}`, session, verdict: "failed", note: "" };
     record.phases.push(phase);
 
-    const gate = project.gate();
+    const locks = project.locks();
     const verify = project.verify();
     const problems = [
-      gate.tampered.length && `Gesperrte Akzeptanztests verändert: ${gate.tampered.join(", ")}`,
+      locks.tampered.length && `Gesperrte Akzeptanztests verändert: ${locks.tampered.join(", ")}`,
       !verify.ok && `verify ist rot:\n${verify.output}`,
-      verify.ok && !gate.isApproved && "verify ist grün, aber der aktuelle Stand hat kein bestandenes Review.",
     ].filter(Boolean) as string[];
+    if (problems.length) {
+      phase.note = problems.join("\n\n");
+      log("run", `Versuch ${attempt}: ${problems.map((p) => p.split("\n")[0]).join(" | ")}`);
+      if (session.outcome !== "success") {
+        return finish("gescheitert", `Session endete mit ${session.outcome}.\n\n${phase.note}`);
+      }
+      feedback = `${phase.note}\n\nLetzte Nachricht des vorigen Versuchs:\n${session.finalText}`;
+      continue;
+    }
+    phase.verdict = "ok";
+    phase.note = "verify grün, Akzeptanztests unverändert.";
 
-    if (!problems.length) {
-      phase.verdict = "ok";
-      phase.note = "verify grün, Review bestanden.";
+    const review = await runSession(project, `review ${of}`, reviewPrompt(project, spec, base), reviewer(), options);
+    const verdict = /URTEIL:\s*(BESTANDEN|NACHBESSERN)/i.exec(review.finalText)?.[1].toUpperCase();
+    record.phases.push({
+      name: `review-${attempt}`, session: review, verdict: verdict === "BESTANDEN" ? "ok" : "failed", note: review.finalText,
+    });
+    if (verdict === "BESTANDEN") {
       return finish("freigegeben", `Spec ${spec.id} umgesetzt, verify grün, Review bestanden.`);
     }
-    phase.note = problems.join("\n\n");
-    log("run", `Versuch ${attempt} nicht abgeschlossen: ${problems.map((p) => p.split("\n")[0]).join(" | ")}`);
-    if (session.outcome !== "success") {
-      return finish("gescheitert", `Session endete mit ${session.outcome}.\n\n${phase.note}`);
+    if (!verdict) {
+      return finish("gescheitert", `Der Reviewer hat kein Urteil geliefert (Session: ${review.outcome}).`);
     }
-    feedback = `${phase.note}\n\nLetzte Nachricht des vorigen Versuchs:\n${session.finalText}`;
+    log("run", `Versuch ${attempt}: Review verlangt Nachbesserung.`);
+    feedback = `Das Review verlangt Nachbesserungen:\n\n${review.finalText}`;
   }
   return finish("gescheitert", `Nach ${options.maxAttempts} Versuchen nicht freigegeben.\n\n${feedback}`);
 }
@@ -123,9 +133,20 @@ Die Akzeptanztests dazu sind gesperrt und legen fest, wann du fertig bist:
 ${tests}
 
 Halte dich an AGENTS.md. Setze nur um, was die Spec verlangt. Ändere keine Akzeptanztests.
-Bevor du aufhörst, verlangt die werkstatt, dass \`${project.config.commands.verify}\` grün ist
-und der Subagent werkstatt:reviewer die Änderung abgenommen hat – folge ihren Hinweisen.
-${feedback ? `\nEin vorheriger Versuch ist nicht abgeschlossen worden. Befund des Orchestrators:\n\n${feedback}\n` : ""}`;
+Du bist erst fertig, wenn \`${project.config.commands.verify}\` grün ist. Danach prüft ein
+unabhängiges Review deine Änderung gegen die Spec.
+${feedback ? `\nEin vorheriger Versuch ist nicht abgeschlossen worden. Befund:\n\n${feedback}\n` : ""}`;
+}
+
+function reviewPrompt(project: Project, spec: Spec, base: string): string {
+  const changed = project.dirtyFiles().map((line) => `- ${line}`).join("\n");
+  return `Prüfe die Umsetzung von Spec ${spec.id}: ${spec.path}
+
+Ausgangs-Commit: ${base}
+Geänderte Dateien (git status):
+${changed}
+
+\`${project.config.commands.verify}\` ist grün, die Akzeptanztests sind unverändert.`;
 }
 
 function save(project: Project, record: RunRecord) {

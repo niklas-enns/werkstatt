@@ -19,13 +19,9 @@ export interface Spec {
 }
 
 /** Output of `werkstatt.py check`. */
-export interface GateState {
-  paused: boolean;
+export interface Locks {
   locked: string[];
   tampered: string[];
-  approved: string | null;
-  current: string | null;
-  isApproved: boolean;
 }
 
 export class Project {
@@ -70,15 +66,19 @@ export class Project {
     return { ok: r.status === 0, output: lines.slice(-80).join("\n") };
   }
 
-  gate(): GateState {
+  locks(): Locks {
     return JSON.parse(execFileSync("python3", [HOOK_SCRIPT, "check"], { cwd: this.root, encoding: "utf8" }));
   }
 
   /** Uncommitted changes, ignoring werkstatt's own local state. */
   dirtyFiles(): string[] {
-    return this.git("status", "--porcelain")
+    return this.git("status", "--porcelain", "--untracked-files=all")
       .split("\n")
       .filter((line) => line && !line.slice(3).startsWith(".werkstatt/state"));
+  }
+
+  head(): string {
+    return this.git("rev-parse", "HEAD");
   }
 
   git(...args: string[]): string {

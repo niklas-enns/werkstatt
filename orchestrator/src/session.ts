@@ -1,10 +1,19 @@
-import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import { query, type Options, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { PLUGIN_ROOT, type Project } from "./project.js";
 
 export interface SessionOptions {
   model?: string;
   maxBudgetUsd?: number;
   maxTurns?: number;
+}
+
+/** What distinguishes the phases: who works, with which tools, in which mode. */
+export interface Role {
+  /** Plugin agent for the main thread, e.g. `werkstatt:reviewer`. */
+  agent?: string;
+  tools: string[];
+  /** Value of WERKSTATT_PHASE, read by the stop hook. */
+  phase?: string;
 }
 
 export interface SessionResult {
@@ -16,27 +25,31 @@ export interface SessionResult {
   finalText: string;
 }
 
-const READ_ONLY_GIT = ["status", "diff", "log", "show", "ls-files"].map((cmd) => `Bash(git ${cmd} *)`);
+const READ_ONLY = [
+  "Read", "Glob", "Grep",
+  ...["status", "diff", "log", "show", "ls-files"].map((cmd) => `Bash(git ${cmd} *)`),
+  "Bash(ls *)", "Bash(cat *)", "Bash(find *)", "Bash(grep *)", "Bash(head *)", "Bash(tail *)",
+];
 
-/**
- * Tools the agent may use without a human present. Everything else is denied
- * (permission mode `dontAsk`), so a run never hangs on a permission prompt.
- */
-function allowedTools(project: Project): string[] {
+export function reviewer(): Role {
+  return { agent: "werkstatt:reviewer", tools: READ_ONLY };
+}
+
+/** File tools, subagents, the verify command and its build tool, plus read-only shell. */
+export function builder(project: Project, phase?: string): Role {
   const verify = project.config.commands.verify;
   const program = verify.split(/\s+/)[0];
-  return [
-    "Read", "Glob", "Grep", "Write", "Edit", "MultiEdit", "Agent", "Task", "TodoWrite",
-    `Bash(${verify})`, `Bash(${program} *)`,
-    ...READ_ONLY_GIT,
-    "Bash(ls *)", "Bash(cat *)", "Bash(find *)", "Bash(grep *)", "Bash(head *)", "Bash(tail *)",
-  ];
+  return {
+    phase,
+    tools: [...READ_ONLY, "Write", "Edit", "MultiEdit", "Agent", "Task", "TodoWrite", `Bash(${verify})`, `Bash(${program} *)`],
+  };
 }
 
 export async function runSession(
   project: Project,
   label: string,
   prompt: string,
+  role: Role,
   options: SessionOptions,
 ): Promise<SessionResult> {
   log(label, "Start");
@@ -45,23 +58,23 @@ export async function runSession(
     sessionId: null, outcome: "no_result", costUsd: 0, turns: 0, durationMs: 0, finalText: "",
   };
 
-  const messages = query({
-    prompt,
-    options: {
-      cwd: project.root,
-      plugins: [{ type: "local", path: PLUGIN_ROOT }],
-      skills: "all",
-      settingSources: ["project", "local"],
-      permissionMode: "dontAsk",
-      allowedTools: allowedTools(project),
-      systemPrompt: { type: "preset", preset: "claude_code", append: UNATTENDED },
-      model: options.model,
-      maxBudgetUsd: options.maxBudgetUsd,
-      maxTurns: options.maxTurns,
-    },
-  });
+  const sdkOptions: Options = {
+    cwd: project.root,
+    plugins: [{ type: "local", path: PLUGIN_ROOT }],
+    skills: "all",
+    settingSources: ["project", "local"],
+    // Nobody is there to answer a permission prompt: anything not listed is denied.
+    permissionMode: "dontAsk",
+    allowedTools: role.tools,
+    env: { ...process.env, ...(role.phase ? { WERKSTATT_PHASE: role.phase } : {}) },
+    model: options.model,
+    maxBudgetUsd: options.maxBudgetUsd,
+    maxTurns: options.maxTurns,
+  };
+  if (role.agent) sdkOptions.agent = role.agent;
+  else sdkOptions.systemPrompt = { type: "preset", preset: "claude_code", append: UNATTENDED };
 
-  for await (const message of messages) {
+  for await (const message of query({ prompt, options: sdkOptions })) {
     report(label, message);
     if (message.type === "result") {
       result = {
