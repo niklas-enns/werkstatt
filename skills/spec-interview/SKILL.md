@@ -33,7 +33,14 @@ Auftrag: $ARGUMENTS
 
 5. **Übergeben** – fasse in wenigen Zeilen zusammen, was spezifiziert ist, was offen
    bleibt und was der Nutzer vor der Freigabe prüfen sollte. Nur der Nutzer setzt
-   den Status auf `freigegeben`.
+   den Status auf `freigegeben`. Nenne danach genau diese nächsten Schritte:
+   1. Spec prüfen und im Kopf der Datei `status: freigegeben` setzen.
+   2. Committen.
+   3. Im Terminal `werkstatt run <Nummer>` ausführen – der Orchestrator leitet die
+      Akzeptanztests ab, implementiert und lässt reviewen.
+
+   Verweise nicht auf `derive-tests` oder darauf, selbst zu implementieren – das
+   übernimmt der Orchestrator.
 
 ## Prüfliste
 
