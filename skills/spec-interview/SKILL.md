@@ -39,8 +39,8 @@ Auftrag: $ARGUMENTS
    3. Im Terminal `werkstatt run <Nummer>` ausführen – der Orchestrator leitet die
       Akzeptanztests ab, implementiert und lässt reviewen.
 
-   Verweise nicht auf `derive-tests` oder darauf, selbst zu implementieren – das
-   übernimmt der Orchestrator.
+   Schlage nicht vor, Tests abzuleiten oder selbst zu implementieren – das übernimmt
+   der Orchestrator.
 
 ## Prüfliste
 

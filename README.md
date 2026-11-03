@@ -10,9 +10,8 @@ und ein unabhängiges Review sichern die Qualität.
 |--------------------------------|------------------------|---------------|
 | `project-init`                 | Skill                  | erste Version |
 | `spec-interview`               | Skill                  | erste Version |
-| `derive-tests`                 | Skill                  | erste Version |
 | Akzeptanztests sperren         | Hooks                  | erste Version |
-| `reviewer`                     | Agent                  | erste Version |
+| `test-writer`, `implementer`, `reviewer` | Agents       | erste Version |
 | Orchestrator (`werkstatt run`) | Agent SDK (TypeScript) | erste Version |
 | Metriken-Auswertung            | –                      | geplant       |
 
@@ -58,9 +57,11 @@ Werkzeuge setzen das voraus.
 in einer eigenen Agent-Session mit frischem Kontext:
 
 1. **Vorbedingungen**: Spec ist `freigegeben`, keine uncommitteten Änderungen.
-2. **Akzeptanztests**: `/werkstatt:derive-tests`, falls es noch keine Testdateien mit
-   `Spec<Nummer>` im Namen gibt. Der Orchestrator prüft, dass sie entstanden und gesperrt sind.
-3. **Implementierung**: Der Stop-Hook lässt den Agent erst aufhören, wenn `verify` grün
+2. **Akzeptanztests**: Agent `werkstatt:test-writer`, falls es noch keine Testdateien mit
+   `Spec<Nummer>` im Namen gibt. Er meldet strukturiert, welcher Test welches Kriterium
+   prüft – oder bricht ab, wenn die Spec sich nicht sauber in Tests übersetzen lässt.
+   Der Orchestrator prüft, dass die Tests entstanden und gesperrt sind.
+3. **Implementierung**: Agent `werkstatt:implementer`. Der Stop-Hook lässt ihn erst aufhören, wenn `verify` grün
    ist. Danach prüft der Orchestrator selbst: Akzeptanztests unverändert, `verify` grün.
 4. **Review**: eigene Session mit dem Agent `werkstatt:reviewer` – nur lesende Werkzeuge,
    Maßstab sind Spec und `AGENTS.md`. Bei `NACHBESSERN` geht es mit den Befunden zurück

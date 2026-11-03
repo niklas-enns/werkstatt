@@ -9,8 +9,8 @@ export interface SessionOptions {
 
 /** What distinguishes the phases: who works, with which tools, in which mode. */
 export interface Role {
-  /** Plugin agent for the main thread, e.g. `werkstatt:reviewer`. */
-  agent?: string;
+  /** Plugin agent for the main thread; its definition in agents/ says how the phase works. */
+  agent: string;
   tools: string[];
   /** Value of WERKSTATT_PHASE, read by the stop hook. */
   phase?: string;
@@ -29,23 +29,28 @@ export interface SessionResult {
 }
 
 const READ_ONLY = [
-  "Read", "Glob", "Grep",
+  "Read",
   ...["status", "diff", "log", "show", "ls-files"].map((cmd) => `Bash(git ${cmd} *)`),
   "Bash(ls *)", "Bash(cat *)", "Bash(find *)", "Bash(grep *)", "Bash(head *)", "Bash(tail *)",
 ];
 
-export function reviewer(outputSchema: Record<string, unknown>): Role {
-  return { agent: "werkstatt:reviewer", tools: READ_ONLY, outputSchema };
-}
-
-/** File tools, subagents, the verify command and its build tool, plus read-only shell. */
-export function builder(project: Project, phase?: string): Role {
+/** Read-only shell plus file edits, the verify command and its build tool. */
+function writing(project: Project): string[] {
   const verify = project.config.commands.verify;
   const program = verify.split(/\s+/)[0];
-  return {
-    phase,
-    tools: [...READ_ONLY, "Write", "Edit", "MultiEdit", "Agent", "Task", "TodoWrite", `Bash(${verify})`, `Bash(${program} *)`],
-  };
+  return [...READ_ONLY, "Write", "Edit", `Bash(${verify})`, `Bash(${program} *)`];
+}
+
+export function testWriter(project: Project, outputSchema: Record<string, unknown>): Role {
+  return { agent: "werkstatt:test-writer", tools: writing(project), outputSchema };
+}
+
+export function implementer(project: Project): Role {
+  return { agent: "werkstatt:implementer", tools: writing(project), phase: "implement" };
+}
+
+export function reviewer(outputSchema: Record<string, unknown>): Role {
+  return { agent: "werkstatt:reviewer", tools: READ_ONLY, outputSchema };
 }
 
 export async function runSession(
@@ -63,8 +68,8 @@ export async function runSession(
 
   const sdkOptions: Options = {
     cwd: project.root,
+    agent: role.agent,
     plugins: [{ type: "local", path: PLUGIN_ROOT }],
-    skills: "all",
     settingSources: ["project", "local"],
     // Nobody is there to answer a permission prompt: anything not listed is denied.
     permissionMode: "dontAsk",
@@ -75,8 +80,6 @@ export async function runSession(
     maxTurns: options.maxTurns,
   };
   if (role.outputSchema) sdkOptions.outputFormat = { type: "json_schema", schema: role.outputSchema };
-  if (role.agent) sdkOptions.agent = role.agent;
-  else sdkOptions.systemPrompt = { type: "preset", preset: "claude_code", append: UNATTENDED };
 
   for await (const message of query({ prompt, options: sdkOptions })) {
     report(label, message);
@@ -96,11 +99,6 @@ export async function runSession(
   return result;
 }
 
-const UNATTENDED = `
-Du arbeitest unbeaufsichtigt im werkstatt-Orchestrator. Niemand beantwortet Rückfragen.
-Wenn du ohne eine Entscheidung des Nutzers nicht weiterkommst (z. B. die Spec ist
-unklar oder ein Akzeptanztest widerspricht ihr), hör auf und beschreibe in deiner
-letzten Nachricht genau, was entschieden werden muss.`;
 
 function report(label: string, message: SDKMessage) {
   if (message.type === "assistant" && message.parent_tool_use_id === null) {

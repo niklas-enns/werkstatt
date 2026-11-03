@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import type { Project, Spec } from "./project.js";
-import { builder, log, reviewer, runSession, type SessionOptions, type SessionResult } from "./session.js";
+import { implementer, log, reviewer, runSession, testWriter, type SessionOptions, type SessionResult } from "./session.js";
 
 export interface RunOptions extends SessionOptions {
   maxAttempts: number;
@@ -59,6 +59,34 @@ const REVIEW_SCHEMA = {
   },
 };
 
+interface TestsResult {
+  ok: boolean;
+  reason: string;
+  tests: { criterion: string; test: string; redBecause: string }[];
+}
+
+const TESTS_SCHEMA = {
+  type: "object",
+  required: ["ok", "reason", "tests"],
+  properties: {
+    ok: { type: "boolean", description: "false, wenn die Spec sich nicht sauber in Tests übersetzen lässt" },
+    reason: { type: "string", description: "Bei ok=false: die Lücke in der Spec und ein Vorschlag. Sonst eine kurze Zusammenfassung." },
+    tests: {
+      type: "array",
+      description: "Ein Eintrag pro Akzeptanzkriterium",
+      items: {
+        type: "object",
+        required: ["criterion", "test", "redBecause"],
+        properties: {
+          criterion: { type: "string", description: "AK-ID, z. B. AK-3" },
+          test: { type: "string", description: "Testklasse und -methode" },
+          redBecause: { type: "string", description: "Warum der Test ohne Implementierung fehlschlägt, in Stichworten" },
+        },
+      },
+    },
+  },
+};
+
 export interface RunRecord {
   spec: string;
   startedAt: string;
@@ -108,15 +136,17 @@ export async function run(project: Project, specId: string, options: RunOptions)
   if (project.acceptanceTests(spec).length) {
     record.phases.push({ name: "tests", verdict: "skipped", note: "Akzeptanztests vorhanden." });
   } else {
-    const session = await runSession(project, "tests", `/werkstatt:derive-tests ${spec.id}`, builder(project), options);
+    const session = await runSession(project, "tests", testsPrompt(project, spec), testWriter(project, TESTS_SCHEMA), options);
+    const result = session.structured as TestsResult | undefined;
     const tests = project.acceptanceTests(spec);
     const phase: Phase = { name: "tests", session, verdict: "ok", note: "" };
     record.phases.push(phase);
-    if (!tests.length) {
+    if (!result?.ok || !tests.length) {
       phase.verdict = "failed";
-      phase.note = session.finalText;
-      return finish("abgebrochen", `Keine Akzeptanztests für Spec ${spec.id} entstanden.\n\n${session.finalText}`);
+      phase.note = result?.reason ?? session.finalText;
+      return finish("abgebrochen", `Keine Akzeptanztests für Spec ${spec.id}:\n\n${phase.note}`);
     }
+    log("tests", result.tests.map((t) => `${t.criterion} → ${t.test}`).join(" | "));
     const unlocked = tests.filter((t) => !project.locks().locked.includes(t));
     phase.note = `${tests.length} Testdatei(en)` + (unlocked.length ? `, NICHT gesperrt: ${unlocked.join(", ")}` : ", gesperrt.");
     if (unlocked.length) {
@@ -134,7 +164,7 @@ export async function run(project: Project, specId: string, options: RunOptions)
   let limit = options.maxAttempts;
   for (let attempt = 1; attempt <= limit; attempt++) {
     const of = `${attempt}/${limit}`;
-    const session = await runSession(project, `impl ${of}`, implementPrompt(project, spec, feedback), builder(project, "implement"), options);
+    const session = await runSession(project, `impl ${of}`, implementPrompt(project, spec, feedback), implementer(project), options);
     const phase: Phase = { name: `implement-${attempt}`, session, verdict: "failed", note: "" };
     record.phases.push(phase);
 
@@ -212,16 +242,22 @@ export function addDecisionsToSpec(project: Project, spec: Spec, decisions: Deci
   writeFileSync(path, `${text.slice(0, end).trimEnd()}\n${lines}\n${text.slice(end)}\n`);
 }
 
+function testsPrompt(project: Project, spec: Spec): string {
+  return `Leite die Akzeptanztests für Spec ${spec.id} ab: ${spec.path}
+
+Testordner: ${project.config.acceptanceTests}
+Dateinamen beginnen mit: Spec${spec.id}
+Prüfbefehl: ${project.config.commands.verify}`;
+}
+
 function implementPrompt(project: Project, spec: Spec, feedback: string): string {
   const tests = project.acceptanceTests(spec).map((t) => `- ${t}`).join("\n");
   return `Setze Spec ${spec.id} um: ${spec.path}
 
-Die Akzeptanztests dazu sind gesperrt und legen fest, wann du fertig bist:
+Gesperrte Akzeptanztests:
 ${tests}
 
-Halte dich an AGENTS.md. Setze nur um, was die Spec verlangt. Ändere keine Akzeptanztests.
-Du bist erst fertig, wenn \`${project.config.commands.verify}\` grün ist. Danach prüft ein
-unabhängiges Review deine Änderung gegen die Spec.
+Prüfbefehl: ${project.config.commands.verify}
 ${feedback ? `\nDer bisherige Stand ist noch nicht abgenommen. Rückmeldung:\n\n${feedback}\n` : ""}`;
 }
 

@@ -2,7 +2,7 @@
 name: reviewer
 description: Prüft eine Code-Änderung unabhängig gegen die freigegebene Spec. Wird vom werkstatt-Orchestrator als eigene Phase gestartet, nachdem die Implementierung verify bestanden hat.
 # StructuredOutput is required: the orchestrator collects the verdict through it.
-tools: Read, Grep, Glob, Bash, StructuredOutput
+tools: Read, Bash, StructuredOutput
 ---
 
 # Review gegen die Spec
@@ -41,16 +41,13 @@ Keine Stilfragen, die kein Linter und keine Regel in `AGENTS.md` verlangt.
 
 ## Ergebnis
 
-Gib dein Ergebnis in der vorgegebenen strukturierten Form ab:
+Gib dein Ergebnis in der vorgegebenen strukturierten Form ab; was jedes Feld enthält,
+steht im Schema. Für das Urteil gilt:
 
-- **verdict**: `BESTANDEN`, wenn kein Befund eine Nachbesserung erfordert, sonst `NACHBESSERN`.
-- **summary**: Gesamteinschätzung in wenigen Sätzen.
-- **findings**: jeder Befund mit Ort (`Datei:Zeile`), Bezug (AK-ID, Regel der Spec oder
-  Abschnitt der `AGENTS.md`), Problem samt Erwartung und ob er eine Nachbesserung
-  erfordert (`blocking`). Hinweise ohne Handlungsbedarf mit `blocking: false`.
-- **questions**: Punkte, die die Spec offen lässt und die der Nutzer entscheiden muss.
-  Der Nutzer sieht jede Frage einzeln im Terminal, ohne dein Review – formuliere sie
-  deshalb für sich verständlich: was die Spec offen lässt, wie es jetzt umgesetzt ist,
-  welche Alternative es gäbe. Fragen, die im Abschnitt „Entscheidungen“ der Spec schon
-  beantwortet sind, stellst du nicht erneut. Eine offene Frage ist kein Grund für
-  `NACHBESSERN`, solange die Umsetzung eine vertretbare Auslegung ist.
+- `NACHBESSERN` nur, wenn mindestens ein Befund eine Nachbesserung erfordert. Hinweise
+  ohne Handlungsbedarf markierst du als nicht blockierend.
+- Eine offene Frage ist kein Grund für `NACHBESSERN`, solange die Umsetzung eine
+  vertretbare Auslegung ist. Fragen, die im Abschnitt „Entscheidungen“ der Spec schon
+  beantwortet sind, stellst du nicht erneut.
+- Der Nutzer sieht jede Frage einzeln im Terminal, ohne dein Review. Formuliere sie so,
+  dass sie für sich verständlich ist.
