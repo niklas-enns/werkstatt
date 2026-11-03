@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, join, relative } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, relative } from "node:path";
 
 export const PLUGIN_ROOT = new URL("../../", import.meta.url).pathname;
 export const HOOK_SCRIPT = join(PLUGIN_ROOT, "hooks", "werkstatt.py");
@@ -67,7 +67,41 @@ export class Project {
   }
 
   locks(): Locks {
-    return JSON.parse(execFileSync("python3", [HOOK_SCRIPT, "check"], { cwd: this.root, encoding: "utf8" }));
+    return JSON.parse(this.hookScript("check"));
+  }
+
+  /** Locks acceptance tests that aren't locked yet; returns the newly locked paths. */
+  lock(): string[] {
+    return JSON.parse(this.hookScript("lock")).locked;
+  }
+
+  /** Unlocks and deletes acceptance test files, e.g. after an aborted test phase. */
+  discard(paths: string[]) {
+    if (!paths.length) return;
+    this.hookScript("unlock", ...paths);
+    for (const path of paths) rmSync(join(this.root, path), { force: true });
+  }
+
+  /** Copies of files, independent of the lock manifest that agents could tamper with. */
+  snapshot(paths: string[]): Map<string, Buffer> {
+    return new Map(paths.map((path) => [path, readFileSync(join(this.root, path))]));
+  }
+
+  /** Restores files that differ from the snapshot or are missing; returns their paths. */
+  restore(snapshot: Map<string, Buffer>): string[] {
+    const restored: string[] = [];
+    for (const [path, content] of snapshot) {
+      const file = join(this.root, path);
+      if (existsSync(file) && readFileSync(file).equals(content)) continue;
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, content);
+      restored.push(path);
+    }
+    return restored;
+  }
+
+  private hookScript(...args: string[]): string {
+    return execFileSync("python3", [HOOK_SCRIPT, ...args], { cwd: this.root, encoding: "utf8" });
   }
 
   /** Uncommitted changes, ignoring werkstatt's own local state. */

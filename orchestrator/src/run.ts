@@ -134,7 +134,11 @@ export async function run(project: Project, specId: string, options: RunOptions)
 
   // Phase 1: acceptance tests
   if (project.acceptanceTests(spec).length) {
-    record.phases.push({ name: "tests", verdict: "skipped", note: "Akzeptanztests vorhanden." });
+    // Tests not written by the test-writer (or never locked) must be locked before anyone implements.
+    const locked = project.lock();
+    record.phases.push({
+      name: "tests", verdict: "skipped", note: "Akzeptanztests vorhanden" + (locked.length ? `, jetzt gesperrt: ${locked.join(", ")}` : "."),
+    });
   } else {
     const session = await runSession(project, "tests", testsPrompt(project, spec), testWriter(project, TESTS_SCHEMA), options);
     const result = session.structured as TestsResult | undefined;
@@ -142,12 +146,15 @@ export async function run(project: Project, specId: string, options: RunOptions)
     const phase: Phase = { name: "tests", session, verdict: "ok", note: "" };
     record.phases.push(phase);
     if (!result?.ok || !tests.length) {
+      // Partial tests would be locked and make the next run skip this phase.
+      project.discard(tests);
       phase.verdict = "failed";
-      phase.note = result?.reason ?? session.finalText;
+      phase.note = (result?.reason ?? session.finalText) + (tests.length ? `\n\nVerworfene Testdateien: ${tests.join(", ")}` : "");
       return finish("abgebrochen", `Keine Akzeptanztests für Spec ${spec.id}:\n\n${phase.note}`);
     }
     log("tests", result.tests.map((t) => `${t.criterion} → ${t.test}`).join(" | "));
-    const unlocked = tests.filter((t) => !project.locks().locked.includes(t));
+    const { locked } = project.locks();
+    const unlocked = tests.filter((t) => !locked.includes(t));
     phase.note = `${tests.length} Testdatei(en)` + (unlocked.length ? `, NICHT gesperrt: ${unlocked.join(", ")}` : ", gesperrt.");
     if (unlocked.length) {
       phase.verdict = "failed";
@@ -155,6 +162,8 @@ export async function run(project: Project, specId: string, options: RunOptions)
     }
   }
 
+  // Our own copy: the lock manifest lives in the project, where an agent could delete it.
+  const tests = project.snapshot(project.acceptanceTests(spec));
   const before = project.verify();
   if (before.ok) log("run", "verify ist bereits grün – die Tests prüfen evtl. zu wenig, oder die Spec ist schon umgesetzt.");
 
@@ -168,10 +177,11 @@ export async function run(project: Project, specId: string, options: RunOptions)
     const phase: Phase = { name: `implement-${attempt}`, session, verdict: "failed", note: "" };
     record.phases.push(phase);
 
-    const locks = project.locks();
+    const tampered = project.restore(tests);
+    if (tampered.length) project.lock();
     const verify = project.verify();
     const problems = [
-      locks.tampered.length && `Gesperrte Akzeptanztests verändert: ${locks.tampered.join(", ")}`,
+      tampered.length && `Gesperrte Akzeptanztests verändert oder gelöscht (wiederhergestellt): ${tampered.join(", ")}`,
       !verify.ok && `verify ist rot:\n${verify.output}`,
     ].filter(Boolean) as string[];
     if (problems.length) {

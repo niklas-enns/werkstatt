@@ -252,8 +252,9 @@ def cmd_unlock(p: Project, args: list[str]):
         del locked[rel]
         p.locked_copy(rel).unlink(missing_ok=True)
         print(f"entsperrt: {rel}")
-    p.save_manifest(locked)
-    if not hits:
+    if hits:
+        p.save_manifest(locked)
+    else:
         print("Nichts gefunden.")
 
 
