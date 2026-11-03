@@ -1,8 +1,9 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
-export const PLUGIN_ROOT = new URL("../../", import.meta.url).pathname;
+export const PLUGIN_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 export const HOOK_SCRIPT = join(PLUGIN_ROOT, "hooks", "werkstatt.py");
 
 export interface WerkstattConfig {
