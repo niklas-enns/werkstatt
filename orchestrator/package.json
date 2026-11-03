@@ -20,5 +20,11 @@
     "@types/node": "^26.6.6",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/niklas-enns/werkstatt.git",
+    "directory": "orchestrator"
   }
 }

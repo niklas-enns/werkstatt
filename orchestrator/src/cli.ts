@@ -1,16 +1,20 @@
 #!/usr/bin/env node
+import { execFileSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
-import { Project } from "./project.js";
+import { HOOK_SCRIPT, Project } from "./project.js";
 import { run, type Decision } from "./run.js";
 
-const USAGE = `Aufruf: werkstatt run <Spec-ID> [Optionen]
+const USAGE = `Aufruf:
+  werkstatt run <Spec-ID> [Optionen]   Spec umsetzen
+  werkstatt status                     gesperrte Akzeptanztests anzeigen
+  werkstatt unlock <Pfad-Teil>...      Akzeptanztests entsperren (nur für Menschen)
 
-Führt eine freigegebene Spec ohne Zutun durch: Akzeptanztests ableiten (falls
+\`run\` führt eine freigegebene Spec ohne Zutun durch: Akzeptanztests ableiten (falls
 noch keine da sind), implementieren, verify und Review – jeweils in eigenen
 Agent-Sessions. Committet nicht.
 
-Optionen:
+Optionen für run:
   --project <dir>       Projektverzeichnis (Standard: aktuelles Verzeichnis)
   --attempts <n>        Implementierungsversuche (Standard: 2)
   --budget <usd>        Kostenobergrenze je Session in USD
@@ -32,6 +36,10 @@ async function main() {
     },
   });
   const [command, specId] = positionals;
+  if (command === "status" || command === "unlock") {
+    execFileSync("python3", [HOOK_SCRIPT, ...positionals], { cwd: values.project, stdio: "inherit" });
+    return;
+  }
   if (values.help || command !== "run" || !specId) {
     console.log(USAGE);
     process.exit(values.help ? 0 : 2);

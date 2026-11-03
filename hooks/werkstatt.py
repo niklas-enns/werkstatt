@@ -6,7 +6,7 @@ Hooks (called by Claude Code with JSON on stdin):
     stop       restore tampered tests and lock new ones; when the orchestrator runs
                the implementation phase (WERKSTATT_PHASE=implement), require green verify
 
-User commands (run via `! python3 <plugin>/hooks/werkstatt.py <cmd>`):
+User commands (usually via `werkstatt status|unlock`, which calls this script):
     status                 show locked acceptance tests
     check                  locks as JSON, without changing anything (used by the orchestrator)
     unlock <path|text>...  unlock acceptance tests whose path contains <text>
@@ -124,7 +124,7 @@ def hook_pre_tool(p: Project, data: dict):
 
     if tool == "Bash":
         cmd = inp.get("command", "")
-        if "werkstatt.py" in cmd and re.search(r"\bunlock\b", cmd):
+        if re.search(r"werkstatt(\.py)?\s+unlock\b", cmd):
             return deny("werkstatt: Entsperren ist dem Nutzer vorbehalten.")
         touches = [x for x in [p.acceptance, ".werkstatt", "werkstatt.json"] if x in cmd]
         touches += [r for r in locked if Path(r).name in cmd]

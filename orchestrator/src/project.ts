@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 
 export const PLUGIN_ROOT = new URL("../../", import.meta.url).pathname;
-const HOOK_SCRIPT = join(PLUGIN_ROOT, "hooks", "werkstatt.py");
+export const HOOK_SCRIPT = join(PLUGIN_ROOT, "hooks", "werkstatt.py");
 
 export interface WerkstattConfig {
   specs: string;

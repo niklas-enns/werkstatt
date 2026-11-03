@@ -1,103 +1,195 @@
+<div align="center">
+
 # werkstatt
 
-Werkzeuge für Softwareentwicklung, bei der Coding-Agents den Code schreiben.
-Menschen spezifizieren und geben frei, Agents setzen um, automatische Prüfungen
-und ein unabhängiges Review sichern die Qualität.
+**Spezifikationsgetriebene Entwicklung mit Coding-Agents – mit Leitplanken, die halten.**
 
-## Werkzeuge
+Du legst fest, *was* gebaut wird. Agents bauen es.
+Gesperrte Akzeptanztests und ein unabhängiges Review sorgen dafür, dass am Ende das herauskommt, was in der Spec steht.
 
-| Werkzeug                       | Art                    | Stand         |
-|--------------------------------|------------------------|---------------|
-| `project-init`                 | Skill                  | erste Version |
-| `spec-interview`               | Skill                  | erste Version |
-| Akzeptanztests sperren         | Hooks                  | erste Version |
-| `test-writer`, `implementer`, `reviewer` | Agents       | erste Version |
-| Orchestrator (`werkstatt run`) | Agent SDK (TypeScript) | erste Version |
-| Metriken-Auswertung            | –                      | geplant       |
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.1.0-orange.svg)](https://github.com/niklas-enns/werkstatt/releases)
+[![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-Plugin-d97757.svg)](https://code.claude.com/docs/en/plugins)
 
-## Einrichten
+</div>
 
-werkstatt ist ein Claude-Code-Plugin. Lokal einbinden:
+---
+
+## Warum?
+
+Coding-Agents schreiben schnell Code. Schwierig ist alles drumherum:
+
+- **Was genau soll gebaut werden?** Implizites Wissen, Randfälle und Fachregeln stehen selten im Ticket.
+- **Stimmt das Ergebnis?** Ein Agent, der seine eigenen Tests schreibt, bestätigt sich gern selbst – und passt im Zweifel den Test an statt den Code.
+- **Wer prüft?** Menschen kommen beim Lesen von generiertem Code nicht hinterher.
+
+werkstatt ist die Harness um den Agent herum, die diese Lücken schließt: Spec zuerst, Tests vor dem Code und gegen Änderungen gesperrt, deterministische Prüfungen außerhalb des Modells und ein Review mit frischem Blick.
+
+## So funktioniert's
+
+```mermaid
+flowchart LR
+    idea([Idee]) --> interview["/werkstatt:spec-interview"]
+    interview --> spec[Spec mit<br/>Akzeptanzkriterien]
+    spec --> release{{Du gibst frei}}
+    release --> run["werkstatt run"]
+
+    subgraph run_box [Orchestrator · jede Phase eine eigene Agent-Session]
+        direction LR
+        tests[test-writer<br/>leitet Tests ab] --> lock[(Tests<br/>gesperrt)]
+        lock --> impl[implementer<br/>setzt um]
+        impl --> verify{verify<br/>grün?}
+        verify -- nein --> impl
+        verify -- ja --> review[reviewer<br/>prüft gegen Spec]
+        review -- nachbessern --> impl
+    end
+
+    run --> tests
+    review -- bestanden --> done([Diff ansehen<br/>und committen])
+```
+
+1. **Spezifizieren** – Im Interview fragt ein Agent dich nach Regeln, Randfällen, Fehlerfällen und Schnittstelle, bis jedes Akzeptanzkriterium eindeutig prüfbar ist.
+2. **Freigeben** – Nur du setzt eine Spec auf `freigegeben`.
+3. **Umsetzen lassen** – `werkstatt run` erledigt den Rest ohne Zutun:
+   - Der **test-writer** übersetzt jedes Akzeptanzkriterium in einen ausführbaren Test. Die Tests werden **gesperrt**.
+   - Der **implementer** setzt um. Er kann erst aufhören, wenn `verify` grün ist – und die gesperrten Tests kann er nicht ändern.
+   - Der **reviewer** prüft die Änderung unabhängig gegen Spec und Konventionen. Bei Mängeln geht es mit seinen Befunden in eine weitere Runde.
+4. **Entscheiden** – Lässt die Spec etwas offen, fragt werkstatt dich am Ende direkt im Terminal. Deine Entscheidung landet in der Spec.
+
+## Was drin ist
+
+| Baustein | Art | Aufgabe |
+|---|---|---|
+| `project-init` | Skill | Richtet ein Projekt ein: `AGENTS.md`, `werkstatt.json`, Ordner für Specs und Akzeptanztests – in einem leeren Ordner auch das Projektgerüst |
+| `spec-interview` | Skill | Macht aus einer groben Idee per Befragung eine prüfbare Spec |
+| `test-writer` | Agent | Leitet Black-Box-Akzeptanztests aus der Spec ab, einen pro Kriterium |
+| `implementer` | Agent | Setzt die Spec um, bis die gesperrten Tests grün sind |
+| `reviewer` | Agent | Prüft die Umsetzung gegen Spec und `AGENTS.md`, mit strukturiertem Urteil |
+| Hooks | Hooks | Sperren Akzeptanztests gegen Änderungen, erzwingen grünes `verify` beim implementer |
+| `werkstatt run` | Orchestrator (TypeScript, [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk)) | Steuert die Phasen, prüft selbst, wiederholt, fragt nach, protokolliert |
+
+## Schnellstart
+
+### 1. Plugin installieren
+
+In Claude Code:
 
 ```
-/plugin marketplace add ~/IdeaProjects/werkstatt
-/plugin install werkstatt@werkstatt-local
+/plugin marketplace add niklas-enns/werkstatt
+/plugin install werkstatt@werkstatt
 ```
 
-Zum Ausprobieren ohne Installation: `claude --plugin-dir ~/IdeaProjects/werkstatt`
+### 2. Orchestrator installieren
 
-Orchestrator einmalig bauen:
-
+```bash
+git clone https://github.com/niklas-enns/werkstatt.git
+cd werkstatt/orchestrator
+npm install && npm run build && npm link
 ```
-cd ~/IdeaProjects/werkstatt/orchestrator && npm install && npm run build && npm link
-```
 
-## Ablauf
+Danach steht der Befehl `werkstatt` überall zur Verfügung. Der Orchestrator nutzt deinen Claude-Code-Login oder `ANTHROPIC_API_KEY` und lädt die Agents und Hooks aus seinem eigenen Checkout.
 
-Im Zielprojekt (z. B. [wannwo](../wannwo)) – die ersten Schritte interaktiv in Claude Code:
+### 3. Loslegen
+
+Im Zielprojekt, in Claude Code:
 
 ```
 /werkstatt:project-init
-/werkstatt:spec-interview Teilnehmende sollen über Terminvorschläge abstimmen können
+/werkstatt:spec-interview Eine Person legt eine Terminabstimmung mit mehreren Vorschlägen an
 ```
 
-Spec prüfen, Status auf `freigegeben` setzen, committen. Den Rest übernimmt der Orchestrator:
+Spec lesen, im Kopf der Datei `status: freigegeben` setzen, committen. Dann im Terminal:
+
+```bash
+werkstatt run 001
+```
+
+## Der Orchestrator im Detail
 
 ```
-werkstatt run 001 --budget 5
+werkstatt run <Spec-ID> [--attempts 2] [--budget <usd>] [--max-turns <n>] [--model <id>] [--allow-dirty]
 ```
 
-`project-init` legt `AGENTS.md`, `werkstatt.json` und die Ordner für Specs und
-Akzeptanztests an – in einem leeren Ordner auch das Projektgerüst. Die übrigen
-Werkzeuge setzen das voraus.
+| Schritt | Was passiert | Wer prüft |
+|---|---|---|
+| Vorbedingungen | Spec ist `freigegeben`, Arbeitsverzeichnis ist sauber | Orchestrator |
+| Akzeptanztests | `test-writer` schreibt Tests (Dateiname enthält `Spec<Nummer>`) und meldet, welcher Test welches Kriterium prüft – oder bricht ab, wenn die Spec nicht prüfbar ist | Orchestrator: Tests vorhanden und gesperrt |
+| Implementierung | `implementer` setzt um | Stop-Hook: `verify` grün · Orchestrator: Tests unverändert, `verify` grün |
+| Review | `reviewer` liefert `BESTANDEN` / `NACHBESSERN`, Befunde und offene Fragen | Orchestrator wertet das strukturierte Urteil aus |
+| Nachbessern | Blockierende Befunde gehen als Auftrag in die nächste Runde | bis `--attempts` erreicht ist |
+| Offene Fragen | Im Terminal: **so lassen**, **anders entscheiden** oder **später** – Entscheidungen landen im Abschnitt „Entscheidungen“ der Spec | du |
 
-## Orchestrator
+werkstatt committet nie. Jeder Lauf wird nach `.werkstatt/state/runs/` protokolliert – Phasen, Kosten, Turns, Ergebnis als JSON, jedes Review zusätzlich als lesbare Markdown-Datei.
 
-`werkstatt run <Spec-ID>` führt eine freigegebene Spec ohne Zutun durch – jede Phase
-in einer eigenen Agent-Session mit frischem Kontext:
+Die Agent-Sessions laufen ohne Rückfragen: Erlaubt sind Dateiwerkzeuge, der Prüfbefehl und lesende Shell- und git-Befehle – alles andere wird verweigert.
 
-1. **Vorbedingungen**: Spec ist `freigegeben`, keine uncommitteten Änderungen.
-2. **Akzeptanztests**: Agent `werkstatt:test-writer`, falls es noch keine Testdateien mit
-   `Spec<Nummer>` im Namen gibt. Er meldet strukturiert, welcher Test welches Kriterium
-   prüft – oder bricht ab, wenn die Spec sich nicht sauber in Tests übersetzen lässt.
-   Der Orchestrator prüft, dass die Tests entstanden und gesperrt sind.
-3. **Implementierung**: Agent `werkstatt:implementer`. Der Stop-Hook lässt ihn erst aufhören, wenn `verify` grün
-   ist. Danach prüft der Orchestrator selbst: Akzeptanztests unverändert, `verify` grün.
-4. **Review**: eigene Session mit dem Agent `werkstatt:reviewer` – nur lesende Werkzeuge,
-   Maßstab sind Spec und `AGENTS.md`. Bei `NACHBESSERN` geht es mit den Befunden zurück
-   zu Schritt 3, bis `--attempts` (Standard 2) erreicht ist.
-   Ist das Review bestanden, lässt aber Fragen offen, die die Spec nicht regelt, fragt der
-   Orchestrator im Terminal nach: **so lassen**, **anders entscheiden** oder **später**.
-   Entscheidungen werden im Abschnitt „Entscheidungen“ der Spec festgehalten; eine
-   geänderte Entscheidung löst eine weitere Runde aus Implementierung und Review aus.
-5. **Protokoll** nach `.werkstatt/state/runs/` – Phasen, Kosten, Turns, Ergebnis als JSON,
-   jedes Review zusätzlich als lesbare Markdown-Datei (`…-review-<Versuch>.md`).
+## Schutz der Akzeptanztests
 
-Der Orchestrator committet nicht. Die Sessions laufen ohne Rückfragen (`dontAsk`): erlaubt
-sind Dateiwerkzeuge, Subagents, der Prüfbefehl und lesende Shell-/git-Befehle, alles
-andere wird verweigert.
-
-## Hooks
-
-Aktiv, sobald das Plugin geladen ist und das Projekt eine `werkstatt.json` hat.
+Die Hooks sind aktiv, sobald das Plugin geladen ist und das Projekt eine `werkstatt.json` hat – auch wenn du interaktiv mit Claude Code arbeitest.
 
 | Hook | Wirkung |
-|------|---------|
-| `PreToolUse` | Verweigert Schreibzugriffe auf gesperrte Akzeptanztests, `.werkstatt/` und `werkstatt.json` – auch offensichtliche Bash-Umwege (`rm`, `sed -i`, Umleitungen …). Neue Testdateien sind erlaubt. |
-| `Stop` | Stellt veränderte gesperrte Tests aus der Sperrkopie wieder her und sperrt neue Testdateien. In der Implementierungsphase des Orchestrators (`WERKSTATT_PHASE=implement`) muss außerdem `verify` grün sein. |
+|---|---|
+| `PreToolUse` | Verweigert Schreibzugriffe auf gesperrte Akzeptanztests, `.werkstatt/` und `werkstatt.json` – auch offensichtliche Umwege über die Shell (`rm`, `sed -i`, Umleitungen …) |
+| `Stop` | Stellt veränderte gesperrte Tests aus der Sperrkopie wieder her und sperrt neue Testdateien. In der Implementierungsphase muss außerdem `verify` grün sein |
 
-Interaktiv blockiert der Stop-Hook also nur, wenn ein gesperrter Test verändert wurde.
-Voraussetzung: `python3` ≥ 3.9.
+Entsperren können nur Menschen:
 
-Dateien im Zielprojekt:
-- `.werkstatt/locks/` – Sperrliste und Sperrkopien. **Committen**, damit die Sperren für alle gelten.
-- `.werkstatt/state/` – lokale Protokolle der Läufe, ignoriert sich selbst.
+```bash
+werkstatt status              # gesperrte Akzeptanztests anzeigen
+werkstatt unlock Spec001      # Tests entsperren, deren Pfad "Spec001" enthält
+```
 
-### Befehle für den Nutzer
+`.werkstatt/locks/` gehört ins Repository, damit die Sperren für alle gelten. `.werkstatt/state/` ignoriert sich selbst.
 
-Im Claude-Code-Prompt mit `!` ausführen – der Agent selbst darf `unlock` nicht aufrufen.
+## Konfiguration
+
+`project-init` legt eine `werkstatt.json` im Projekt an:
+
+```json
+{
+  "version": 1,
+  "specs": "docs/specs",
+  "acceptanceTests": "src/test/java/com/example/acceptance",
+  "commands": {
+    "verify": "./mvnw verify",
+    "run": "./mvnw quarkus:dev"
+  }
+}
+```
+
+Kontext und Konventionen für die Agents stehen in der `AGENTS.md` des Projekts.
+
+## Voraussetzungen und Grenzen
+
+**Voraussetzungen**
+- [Claude Code](https://code.claude.com) mit Plugin-Unterstützung
+- Node.js ≥ 20 (Orchestrator), Python ≥ 3.9 (Hooks), git
+- Im Zielprojekt: **ein** Befehl, der baut und alle Tests ausführt
+
+**Passt gut** für Backend- und Service-Projekte, deren Verhalten sich über eine Schnittstelle von außen testen lässt (HTTP, CLI, öffentliche API).
+
+**Noch nicht gut** für
+- UI-lastige Anwendungen, Datenanalysen oder Infrastruktur-Code – dort passt das Schema „Akzeptanztest gegen Schnittstelle“ schlechter
+- mehrere Specs gleichzeitig in Arbeit – werkstatt arbeitet eine Spec nach der anderen ab
+- geänderte Entscheidungen nach dem Review: Sie werden umgesetzt und reviewt, aber nicht durch neue Akzeptanztests abgesichert
+
+## Projektstruktur
 
 ```
-! python3 ~/IdeaProjects/werkstatt/hooks/werkstatt.py status
-! python3 ~/IdeaProjects/werkstatt/hooks/werkstatt.py unlock Spec001   # Tests entsperren (Pfad-Teil)
+werkstatt/
+├── .claude-plugin/     Plugin- und Marketplace-Manifest
+├── skills/             project-init, spec-interview
+├── agents/             test-writer, implementer, reviewer
+├── hooks/              Sperre der Akzeptanztests, verify-Gate
+└── orchestrator/       werkstatt run (TypeScript, Claude Agent SDK)
 ```
+
+## Status
+
+werkstatt ist ein frühes Experiment (v0.1). Die Abläufe funktionieren Ende-zu-Ende an einem Beispielprojekt, Schnittstellen und Dateiformate können sich aber noch ändern. Feedback und Issues sind willkommen.
+
+Geplant: Auswertung der Laufprotokolle (Kosten, Versuche, Review-Befunde über mehrere Läufe).
+
+## Lizenz
+
+[Apache License 2.0](LICENSE)

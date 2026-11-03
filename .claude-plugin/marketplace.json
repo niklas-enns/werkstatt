@@ -1,6 +1,6 @@
 {
-  "name": "werkstatt-local",
-  "description": "Lokaler Marktplatz für die werkstatt",
+  "name": "werkstatt",
+  "description": "werkstatt – Harness für spezifikationsgetriebene Entwicklung mit Coding-Agents",
   "owner": {
     "name": "Niklas Enns"
   },

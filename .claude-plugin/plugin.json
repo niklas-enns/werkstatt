@@ -4,5 +4,15 @@
   "description": "Werkzeuge für agentische Softwareentwicklung: Specs, Akzeptanztests, Implementierungs-Schleife und Review.",
   "author": {
     "name": "Niklas Enns"
-  }
+  },
+  "homepage": "https://github.com/niklas-enns/werkstatt",
+  "repository": "https://github.com/niklas-enns/werkstatt",
+  "license": "Apache-2.0",
+  "keywords": [
+    "agents",
+    "spec-driven-development",
+    "acceptance-tests",
+    "code-review",
+    "harness"
+  ]
 }
