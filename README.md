@@ -107,14 +107,14 @@ werkstatt run 001
 ## Der Orchestrator im Detail
 
 ```
-werkstatt run <Spec-ID> [--attempts 2] [--budget <usd>] [--max-turns <n>] [--model <id>] [--allow-dirty]
+werkstatt run <Spec-ID> [--attempts 2] [--budget <usd>] [--max-turns 150] [--model <id>] [--allow-dirty]
 ```
 
 | Schritt | Was passiert | Wer prüft |
 |---|---|---|
 | Vorbedingungen | Spec ist `freigegeben`, Arbeitsverzeichnis ist sauber | Orchestrator |
 | Akzeptanztests | `test-writer` schreibt Tests (Dateiname enthält `Spec<Nummer>`) und meldet, welcher Test welches Kriterium prüft – oder bricht ab, wenn die Spec nicht prüfbar ist | Orchestrator: Tests vorhanden und gesperrt |
-| Implementierung | `implementer` setzt um | Stop-Hook: `verify` grün · Orchestrator: Tests unverändert, `verify` grün |
+| Implementierung | `implementer` setzt um | Stop-Hook: `verify` grün (schickt bis zu dreimal zurück) · Orchestrator: Tests unverändert, `verify` grün |
 | Review | `reviewer` liefert `BESTANDEN` / `NACHBESSERN`, Befunde und offene Fragen | Orchestrator wertet das strukturierte Urteil aus |
 | Nachbessern | Blockierende Befunde gehen als Auftrag in die nächste Runde | bis `--attempts` erreicht ist |
 | Offene Fragen | Im Terminal: **so lassen**, **anders entscheiden** oder **später** – Entscheidungen landen im Abschnitt „Entscheidungen“ der Spec | du |
@@ -130,7 +130,7 @@ Die Hooks sind aktiv, sobald das Plugin geladen ist und das Projekt eine `werkst
 | Hook | Wirkung |
 |---|---|
 | `PreToolUse` | Verweigert Schreibzugriffe auf gesperrte Akzeptanztests, `.werkstatt/` und `werkstatt.json` – auch offensichtliche Umwege über die Shell (`rm`, `sed -i`, Umleitungen …) |
-| `Stop` | Stellt veränderte gesperrte Tests aus der Sperrkopie wieder her und sperrt neue Testdateien. In der Implementierungsphase muss außerdem `verify` grün sein |
+| `Stop` | Stellt veränderte gesperrte Tests aus der Sperrkopie wieder her und sperrt neue Testdateien. In der Implementierungsphase muss außerdem `verify` grün sein – nach drei Zurückweisungen darf die Session trotzdem enden, der Orchestrator prüft ohnehin selbst |
 
 Entsperren können nur Menschen:
 

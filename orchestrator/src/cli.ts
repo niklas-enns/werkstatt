@@ -18,7 +18,7 @@ Optionen für run:
   --project <dir>       Projektverzeichnis (Standard: aktuelles Verzeichnis)
   --attempts <n>        Implementierungsversuche (Standard: 2)
   --budget <usd>        Kostenobergrenze je Session in USD
-  --max-turns <n>       Turn-Obergrenze je Session
+  --max-turns <n>       Turn-Obergrenze je Session (Standard: 150)
   --model <id>          Modell für alle Sessions
   --allow-dirty         Auch mit uncommitteten Änderungen starten`;
 
@@ -29,7 +29,7 @@ async function main() {
       project: { type: "string", default: process.cwd() },
       attempts: { type: "string", default: "2" },
       budget: { type: "string" },
-      "max-turns": { type: "string" },
+      "max-turns": { type: "string", default: "150" },
       model: { type: "string" },
       "allow-dirty": { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
@@ -49,7 +49,7 @@ async function main() {
   const record = await run(project, specId, {
     maxAttempts: Number(values.attempts),
     maxBudgetUsd: values.budget ? Number(values.budget) : undefined,
-    maxTurns: values["max-turns"] ? Number(values["max-turns"]) : undefined,
+    maxTurns: Number(values["max-turns"]),
     model: values.model,
     allowDirty: values["allow-dirty"],
     decide: process.stdin.isTTY ? askUser : undefined,

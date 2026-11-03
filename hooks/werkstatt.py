@@ -4,11 +4,13 @@
 Hooks (called by Claude Code with JSON on stdin):
     pre-tool   deny writes to locked acceptance tests and werkstatt files
     stop       restore tampered tests and lock new ones; when the orchestrator runs
-               the implementation phase (WERKSTATT_PHASE=implement), require green verify
+               the implementation phase (WERKSTATT_PHASE=implement), require green verify –
+               up to MAX_VERIFY_BLOCKS times per session, so a stuck agent can still stop
 
 User commands (usually via `werkstatt status|unlock`, which calls this script):
     status                 show locked acceptance tests
     check                  locks as JSON, without changing anything (used by the orchestrator)
+    lock                   lock acceptance tests that aren't locked yet (used by the orchestrator)
     unlock <path|text>...  unlock acceptance tests whose path contains <text>
 """
 from __future__ import annotations
@@ -23,6 +25,7 @@ import sys
 from pathlib import Path
 
 VERIFY_TIMEOUT = 540
+MAX_VERIFY_BLOCKS = 3
 OUTPUT_TAIL = 80
 
 MUTATING_SHELL = re.compile(
@@ -42,6 +45,7 @@ class Project:
         self.acceptance = config["acceptanceTests"].rstrip("/")
         self.verify = config["commands"]["verify"]
         self.locks_dir = root / ".werkstatt" / "locks"
+        self.state_dir = root / ".werkstatt" / "state"
         self.manifest_path = self.locks_dir / "manifest.json"
 
     @staticmethod
@@ -78,6 +82,14 @@ class Project:
 
     def locked_copy(self, rel: str) -> Path:
         return self.locks_dir / "files" / rel
+
+    def state(self, name: str) -> Path:
+        """File under .werkstatt/state/, which is local and ignores itself in git."""
+        self.state_dir.mkdir(parents=True, exist_ok=True)
+        ignore = self.state_dir / ".gitignore"
+        if not ignore.is_file():
+            ignore.write_text("*\n")
+        return self.state_dir / name
 
 
 def sha256(path: Path) -> str:
@@ -150,13 +162,18 @@ def hook_pre_tool(p: Project, data: dict):
                     "und den Nutzer informieren – nur er kann entsperren.")
 
 
-def check_locks(p: Project) -> list[str]:
-    """Restore tampered locked tests, lock new ones. Returns restored paths."""
+def restore_tampered(p: Project) -> list[str]:
+    """Restore locked tests from their locked copy. Returns restored paths."""
     restored = tampered(p)
     for rel in restored:
         f = p.root / rel
         f.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(p.locked_copy(rel), f)
+    return restored
+
+
+def lock_new(p: Project) -> list[str]:
+    """Lock acceptance tests that aren't locked yet. Returns newly locked paths."""
     locked = p.manifest()
     new = [rel for rel in acceptance_files(p) if rel not in locked]
     for rel in new:
@@ -166,7 +183,7 @@ def check_locks(p: Project) -> list[str]:
         locked[rel] = sha256(p.root / rel)
     if new:
         p.save_manifest(locked)
-    return restored
+    return new
 
 
 def run_verify(p: Project) -> tuple[bool, str]:
@@ -180,7 +197,8 @@ def run_verify(p: Project) -> tuple[bool, str]:
 
 
 def hook_stop(p: Project, data: dict):
-    restored = check_locks(p)
+    restored = restore_tampered(p)
+    lock_new(p)
     if restored:
         return block("werkstatt: Gesperrte Akzeptanztests wurden verändert und "
                      "wiederhergestellt:\n" + "\n".join(f"- {r}" for r in restored) +
@@ -189,10 +207,22 @@ def hook_stop(p: Project, data: dict):
 
     if os.environ.get("WERKSTATT_PHASE") != "implement":
         return
+    session = re.sub(r"[^A-Za-z0-9_-]", "_", str(data.get("session_id") or "unbekannt"))
+    counter = p.state(f"verify-blocks-{session}")
     ok, out = run_verify(p)
-    if not ok:
-        block(f"werkstatt: `{p.verify}` ist rot. Behebe die Ursache, ohne Akzeptanztests "
-              f"anzufassen.\n\n{out}")
+    if ok:
+        counter.unlink(missing_ok=True)
+        return
+    blocks = (int(counter.read_text()) if counter.is_file() else 0) + 1
+    if blocks > MAX_VERIFY_BLOCKS:
+        # The orchestrator checks verify itself; endless blocking would only burn turns.
+        counter.unlink(missing_ok=True)
+        return emit({"systemMessage": f"werkstatt: `{p.verify}` ist nach "
+                     f"{MAX_VERIFY_BLOCKS} Sperren noch rot – die Session darf enden."})
+    counter.write_text(str(blocks))
+    block(f"werkstatt: `{p.verify}` ist rot ({blocks}/{MAX_VERIFY_BLOCKS}). Behebe die "
+          "Ursache, ohne Akzeptanztests anzufassen. Kommst du ohne eine Entscheidung des "
+          f"Nutzers nicht weiter, beschreibe genau, was entschieden werden muss.\n\n{out}")
 
 
 # --- user commands ---------------------------------------------------------
@@ -207,6 +237,10 @@ def cmd_status(p: Project, args: list[str]):
 
 def cmd_check(p: Project, args: list[str]):
     print(json.dumps({"locked": list(p.manifest()), "tampered": tampered(p)}, indent=2))
+
+
+def cmd_lock(p: Project, args: list[str]):
+    print(json.dumps({"locked": lock_new(p)}, indent=2))
 
 
 def cmd_unlock(p: Project, args: list[str]):
@@ -230,6 +264,7 @@ HOOKS = {
 COMMANDS = {
     "status": cmd_status,
     "check": cmd_check,
+    "lock": cmd_lock,
     "unlock": cmd_unlock,
 }
 

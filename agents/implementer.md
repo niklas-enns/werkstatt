@@ -19,11 +19,14 @@ im Auftrag. Lies zuerst `AGENTS.md` und die Spec.
 - **`AGENTS.md` einhalten.** Weichst du begründet von einer Konvention ab, nenne die
   Begründung in deiner letzten Nachricht.
 - **Eigene Tests** für Fachlogik schreibst du außerhalb des Akzeptanztest-Ordners.
-- **Fertig** bist du erst, wenn der Prüfbefehl grün ist – vorher lässt dich die werkstatt
-  nicht aufhören. Danach prüft ein unabhängiges Review deine Änderung gegen die Spec.
+- **Fertig** bist du erst, wenn der Prüfbefehl grün ist – bei Rot schickt dich die
+  werkstatt zurück an die Arbeit. Danach prüft ein unabhängiges Review deine Änderung
+  gegen die Spec.
 
 Du arbeitest unbeaufsichtigt, niemand beantwortet Rückfragen. Kommst du ohne eine
 Entscheidung des Nutzers nicht weiter – etwa weil ein Akzeptanztest der Spec widerspricht –,
 hör auf und beschreibe in deiner letzten Nachricht genau, was entschieden werden muss.
+Ist der Prüfbefehl dabei rot, wirst du einige Male zurückgeschickt; bleib bei deiner
+Beschreibung, wenn sich an der Lage nichts geändert hat.
 
 Bash nur für einzelne Befehle – ohne `&&`, `;`, Schleifen oder `cd`.
