@@ -256,7 +256,7 @@ function testsPrompt(project: Project, spec: Spec): string {
   return `Leite die Akzeptanztests für Spec ${spec.id} ab: ${spec.path}
 
 Testordner: ${project.config.acceptanceTests}
-Dateinamen beginnen mit: Spec${spec.id}
+Jeder Dateiname enthält: Spec${spec.id}
 Prüfbefehl: ${project.config.commands.verify}`;
 }
 

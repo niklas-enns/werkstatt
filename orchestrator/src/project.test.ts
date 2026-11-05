@@ -31,6 +31,12 @@ test("spec reads id, title and status from the front matter", () => {
   assert.deepEqual(project.spec("1"), { id: "001", path: "docs/specs/001-termine.md", title: "Termine", status: "freigegeben" });
 });
 
+test("acceptance tests are found by Spec<NNN> in the file name, ignoring case", () => {
+  write("tests/acceptance/test_spec001_python.py", "");
+  write("tests/acceptance/Spec002OtherTest.java", "");
+  assert.deepEqual(project.acceptanceTests(project.spec("001")).sort(), [TEST, "tests/acceptance/test_spec001_python.py"]);
+});
+
 test("restore brings back changed and deleted files from the snapshot", () => {
   const snapshot = project.snapshot([TEST]);
   assert.deepEqual(project.restore(snapshot), []);

@@ -47,7 +47,7 @@ export class Project {
     return { id: number, path: relative(this.root, path), title: field("titel"), status: field("status") };
   }
 
-  /** Acceptance test files belonging to a spec, identified by `Spec<NNN>` in the file name. */
+  /** Acceptance test files belonging to a spec, identified by `Spec<NNN>` in the file name, in any case. */
   acceptanceTests(spec: Spec): string[] {
     const base = join(this.root, this.config.acceptanceTests);
     if (!existsSync(base)) return [];
@@ -57,7 +57,7 @@ export class Project {
         return statSync(path).isDirectory() ? walk(path) : [path];
       });
     return walk(base)
-      .filter((path) => basename(path).includes(`Spec${spec.id}`))
+      .filter((path) => basename(path).toLowerCase().includes(`spec${spec.id}`))
       .map((path) => relative(this.root, path));
   }
 

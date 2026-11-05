@@ -31,8 +31,9 @@ Orientiere dich an den Konventionen in `AGENTS.md` und an vorhandenen Tests des 
 - **Black-Box**: nur über die Schnittstelle aus der Spec (HTTP, CLI, öffentliche API).
   Keine Imports aus Produktionscode, der noch nicht existiert – die Tests müssen ohne
   Implementierung kompilieren.
-- **Rückverfolgbar**: Der Dateiname enthält `Spec<Nummer>` (z. B. `Spec001…`) – daran
-  erkennt der Orchestrator die Tests einer Spec. Die AK-ID steht im Namen oder in der
+- **Rückverfolgbar**: Der Dateiname enthält `Spec<Nummer>` – daran erkennt der
+  Orchestrator die Tests einer Spec. Groß- und Kleinschreibung nach der Konvention des
+  Stacks, z. B. `Spec001TerminTest.java` oder `test_spec001_termin.py`. Die AK-ID steht im Namen oder in der
   Beschreibung jedes Testfalls, z. B. `@DisplayName("AK-3: …")`. Das gilt auch für
   Hilfsklassen.
 - **Ein Kriterium, ein Testfall.** Weitere Fälle zum selben Kriterium nur, wenn die Spec
