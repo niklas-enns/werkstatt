@@ -225,9 +225,11 @@ export async function run(project: Project, specId: string, options: RunOptions)
       return finish("freigegeben", `Spec ${spec.id} umgesetzt, verify grün, Review bestanden. Review: ${file}`);
     }
     log("run", `Versuch ${attempt}: Review verlangt Nachbesserung.`);
+    // A NACHBESSERN without blocking findings still needs something to act on.
     const blocking = review.findings.filter((f) => f.blocking);
-    feedback = "Das Review verlangt Nachbesserungen:\n\n" +
-      blocking.map((f) => `- ${f.location} (${f.reference}): ${f.problem}`).join("\n");
+    const findings = blocking.length ? blocking : review.findings;
+    feedback = `Das Review verlangt Nachbesserungen:\n\n${review.summary}\n\n` +
+      findings.map((f) => `- ${f.location} (${f.reference}): ${f.problem}`).join("\n");
   }
   return finish("gescheitert", `Nach ${limit} Versuchen nicht freigegeben.\n\n${feedback}`);
 }
