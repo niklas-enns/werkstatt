@@ -45,15 +45,16 @@ async function main() {
     process.exit(values.help ? 0 : 2);
   }
 
-  const project = Project.load(values.project);
-  const record = await run(project, specId, {
-    maxAttempts: Number(values.attempts),
-    maxBudgetUsd: values.budget ? Number(values.budget) : undefined,
-    maxTurns: Number(values["max-turns"]),
+  const options = {
+    maxAttempts: positive("attempts", values.attempts, true),
+    maxBudgetUsd: values.budget === undefined ? undefined : positive("budget", values.budget, false),
+    maxTurns: positive("max-turns", values["max-turns"], true),
     model: values.model,
     allowDirty: values["allow-dirty"],
     decide: process.stdin.isTTY ? askUser : undefined,
-  });
+  };
+  const project = Project.load(values.project);
+  const record = await run(project, specId, options);
 
   console.log(`\n=== Spec ${record.spec}: ${record.outcome.toUpperCase()} ===`);
   console.log(record.reason);
@@ -73,6 +74,15 @@ async function main() {
     if (record.outcome === "freigegeben") console.log("\nNächster Schritt: Diff ansehen und committen.");
   }
   process.exit(record.outcome === "freigegeben" ? 0 : 1);
+}
+
+function positive(option: string, value: string, integer: boolean): number {
+  const n = Number(value);
+  if (!(n > 0) || (integer && !Number.isInteger(n))) {
+    console.error(`--${option} erwartet ${integer ? "eine ganze Zahl" : "eine Zahl"} größer 0, nicht "${value}".`);
+    process.exit(2);
+  }
+  return n;
 }
 
 async function askUser(questions: string[]): Promise<Decision[]> {
