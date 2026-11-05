@@ -16,7 +16,8 @@ Auftrag: $ARGUMENTS
 
 1. **Kontext lesen**
    - `AGENTS.md` (bzw. `CLAUDE.md`) des Projekts.
-   - Bestehende Specs in `docs/specs/`, um Begriffe, Nummerierung und Abhängigkeiten zu kennen.
+   - `werkstatt.json`: Der Spec-Ordner steht unter `specs` (Standard `docs/specs`).
+   - Bestehende Specs im Spec-Ordner, um Begriffe, Nummerierung und Abhängigkeiten zu kennen.
    - Code nur so weit, wie nötig, um vorhandenes Verhalten nicht falsch zu beschreiben.
 
 2. **Lücken finden** – gehe die Prüfliste unten durch und notiere für dich, was der
@@ -28,7 +29,7 @@ Auftrag: $ARGUMENTS
    - Höre auf, wenn jedes Akzeptanzkriterium eindeutig prüfbar ist. Lieber eine Runde
      weniger und offene Punkte unter "Offene Fragen" sammeln.
 
-4. **Spec schreiben** nach `docs/specs/NNN-<slug>.md` (nächste freie Nummer, dreistellig)
+4. **Spec schreiben** nach `<Spec-Ordner>/NNN-<slug>.md` (nächste freie Nummer, dreistellig)
    anhand von [spec-template.md](spec-template.md). Status ist immer `entwurf`.
 
 5. **Übergeben** – fasse in wenigen Zeilen zusammen, was spezifiziert ist, was offen

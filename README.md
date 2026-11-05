@@ -139,6 +139,12 @@ werkstatt status              # gesperrte Akzeptanztests anzeigen
 werkstatt unlock Spec001      # Tests entsperren, deren Pfad "Spec001" enthält
 ```
 
+Gut zu wissen:
+
+- **Erst entsperren, dann ändern.** Änderst du einen gesperrten Test von Hand, stellt ihn der nächste Stop-Hook stillschweigend wieder her – auch wenn die Änderung im Editor passiert ist.
+- **Entsperren ist vorübergehend.** Nach `unlock` sperrt der nächste Stop-Hook den Test mit seinem dann aktuellen Inhalt wieder. So korrigierst du einen falschen Test: entsperren, ändern, weiterarbeiten.
+- **Tests neu ableiten lassen:** entsperren *und* die Dateien löschen. Solange Tests einer Spec vorhanden sind, überspringt `werkstatt run` die Phase des test-writer.
+
 `.werkstatt/locks/` gehört ins Repository, damit die Sperren für alle gelten. `.werkstatt/state/` ignoriert sich selbst.
 
 ## Konfiguration
@@ -181,7 +187,15 @@ werkstatt/
 ├── skills/             project-init, spec-interview
 ├── agents/             test-writer, implementer, reviewer
 ├── hooks/              Sperre der Akzeptanztests, verify-Gate
-└── orchestrator/       werkstatt run (TypeScript, Claude Agent SDK)
+├── orchestrator/       werkstatt run (TypeScript, Claude Agent SDK)
+└── tests/              Tests für die Hooks
+```
+
+Tests ausführen:
+
+```bash
+python3 -m unittest discover tests      # Hooks
+cd orchestrator && npm test             # Orchestrator
 ```
 
 ## Status
