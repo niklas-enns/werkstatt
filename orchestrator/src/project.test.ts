@@ -31,6 +31,11 @@ test("spec reads id, title and status from the front matter", () => {
   assert.deepEqual(project.spec("1"), { id: "001", path: "docs/specs/001-termine.md", title: "Termine", status: "freigegeben" });
 });
 
+test("spec reads front matter with CRLF line endings", () => {
+  write("docs/specs/002-crlf.md", "---\r\nid: 002\r\ntitel: Crlf\r\nstatus: entwurf\r\n---\r\n");
+  assert.deepEqual(project.spec("002"), { id: "002", path: "docs/specs/002-crlf.md", title: "Crlf", status: "entwurf" });
+});
+
 test("acceptance tests are found by Spec<NNN> in the file name, ignoring case", () => {
   write("tests/acceptance/test_spec001_python.py", "");
   write("tests/acceptance/Spec002OtherTest.java", "");

@@ -99,7 +99,6 @@ export async function runSession(
   return result;
 }
 
-
 function report(label: string, message: SDKMessage) {
   if (message.type === "assistant" && message.parent_tool_use_id === null) {
     for (const block of message.message.content) {
@@ -115,7 +114,7 @@ function report(label: string, message: SDKMessage) {
 function summarize(input: unknown): string {
   if (typeof input !== "object" || input === null) return "";
   const record = input as Record<string, unknown>;
-  const value = record.command ?? record.file_path ?? record.pattern ?? record.subagent_type ?? record.skill ?? "";
+  const value = record.command ?? record.file_path ?? record.pattern ?? "";
   return String(value).split("\n")[0].slice(0, 100);
 }
 

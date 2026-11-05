@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 export const PLUGIN_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 export const HOOK_SCRIPT = join(PLUGIN_ROOT, "hooks", "werkstatt.py");
+const VERIFY_TIMEOUT_MS = 30 * 60 * 1000;
 
 export interface WerkstattConfig {
   specs: string;
@@ -42,8 +43,8 @@ export class Project {
     const file = existsSync(dir) ? readdirSync(dir).find((f) => f.startsWith(`${number}-`) && f.endsWith(".md")) : undefined;
     if (!file) throw new Error(`Keine Spec ${number} in ${this.config.specs}/.`);
     const path = join(dir, file);
-    const frontmatter = /^---\n([\s\S]*?)\n---/.exec(readFileSync(path, "utf8"))?.[1] ?? "";
-    const field = (name: string) => new RegExp(`^${name}:\\s*([^#\\n]*)`, "m").exec(frontmatter)?.[1].trim() ?? "";
+    const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(readFileSync(path, "utf8"))?.[1] ?? "";
+    const field = (name: string) => new RegExp(`^${name}:[ \\t]*([^#\\r\\n]*)`, "m").exec(frontmatter)?.[1].trim() ?? "";
     return { id: number, path: relative(this.root, path), title: field("titel"), status: field("status") };
   }
 
@@ -62,8 +63,11 @@ export class Project {
   }
 
   verify(): { ok: boolean; output: string } {
-    const r = spawnSync(this.config.commands.verify, { cwd: this.root, shell: true, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    const r = spawnSync(this.config.commands.verify, {
+      cwd: this.root, shell: true, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout: VERIFY_TIMEOUT_MS,
+    });
     const lines = `${r.stdout ?? ""}${r.stderr ?? ""}`.split("\n");
+    if (r.error) lines.push(`werkstatt: verify abgebrochen – ${r.error.message}`);
     return { ok: r.status === 0, output: lines.slice(-80).join("\n") };
   }
 
