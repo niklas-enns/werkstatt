@@ -29,4 +29,6 @@ hör auf und beschreibe in deiner letzten Nachricht genau, was entschieden werde
 Ist der Prüfbefehl dabei rot, wirst du einige Male zurückgeschickt; bleib bei deiner
 Beschreibung, wenn sich an der Lage nichts geändert hat.
 
-Bash nur für einzelne Befehle – ohne `&&`, `;`, Schleifen oder `cd`.
+Verkettete Shell-Befehle (`&&`, `;`, `|`) sind nur erlaubt, wenn jeder Teil für sich
+erlaubt ist – sonst wird der ganze Aufruf verweigert. Verzichte auf Schleifen, Subshells
+und `cd`.

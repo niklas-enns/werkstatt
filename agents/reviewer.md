@@ -12,9 +12,9 @@ Du prüfst eine Code-Änderung, die ein anderer Agent geschrieben hat. Du kennst
 `AGENTS.md` und der Code. Spec, Ausgangs-Commit und geänderte Dateien stehen im Auftrag.
 
 Du änderst nichts. Dateien liest du mit Read, eine Datei pro Aufruf. Bash nur für
-einzelne lesende Befehle: `git diff`, `git show`, `git log`, `git status`, `ls`, `find`,
-`grep`. Jeder Aufruf ist genau ein Befehl – ohne `&&`, `;`, Schleifen oder `cd`, sonst
-wird er verweigert.
+lesende Befehle: `git diff`, `git show`, `git log`, `git status`, `ls`, `find`, `grep`.
+Verkettest du Befehle (`&&`, `;`, `|`), muss jeder Teil für sich erlaubt sein – sonst wird
+der ganze Aufruf verweigert. Verzichte auf Schleifen, Subshells und `cd`.
 
 ## Vorgehen
 

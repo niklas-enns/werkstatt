@@ -55,4 +55,6 @@ Führe den Prüfbefehl aus. Erwartet ist: **kompiliert, die neuen Tests schlagen
   tatsächlich schon vorhanden oder der Test zu schwach ist.
 - Kompilier- oder Setup-Fehler im Test behebst du, bevor du das Ergebnis abgibst.
 
-Bash nur für einzelne Befehle – ohne `&&`, `;`, Schleifen oder `cd`.
+Verkettete Shell-Befehle (`&&`, `;`, `|`) sind nur erlaubt, wenn jeder Teil für sich
+erlaubt ist – sonst wird der ganze Aufruf verweigert. Verzichte auf Schleifen, Subshells
+und `cd`.
