@@ -13,10 +13,10 @@ Task: $ARGUMENTS
 
 ## Language
 
-Run the interview in the language the user writes in, and write the spec's content in
-that language. The format keywords stay in English exactly as in the template, because
-werkstatt parses them: front matter keys and status values, section headings, AC IDs
-and **Given** / **When** / **Then**.
+Everything is in English, whatever language the user writes in: the interview questions,
+your messages and the whole spec. Keep the format keywords exactly as in the template,
+because werkstatt parses them: front matter keys and status values, section headings,
+AC IDs and **Given** / **When** / **Then**.
 
 ## Procedure
 

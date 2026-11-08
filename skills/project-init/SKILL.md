@@ -12,7 +12,8 @@ live, and a single command tells it whether everything is green.
 
 Description from the user (optional): $ARGUMENTS
 
-Talk to the user in the language they write in, and write `AGENTS.md` in that language.
+Everything is in English, whatever language the user writes in: your questions, your
+messages and `AGENTS.md`.
 
 ## Result
 

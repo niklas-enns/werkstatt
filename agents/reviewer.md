@@ -39,8 +39,7 @@ No style issues that neither a linter nor a rule in `AGENTS.md` requires.
 ## Result
 
 Deliver your result in the given structured form; the schema says what each field
-contains. Write summary, findings and questions in the language of the spec. For the
-verdict:
+contains. Write summary, findings and questions in English. For the verdict:
 
 - `NEEDS_WORK` only if at least one finding requires rework. Mark notes that need no
   action as non-blocking.

@@ -44,8 +44,7 @@ Follow the conventions in `AGENTS.md` and the project's existing tests.
   interface and doesn't rely on the order or data of other tests.
 - **Check what the spec says** – nothing more. No assumptions about fields, formats or
   status codes the spec doesn't define.
-- **Language:** test descriptions follow the language of the spec; identifiers follow
-  `AGENTS.md` and the existing tests.
+- **Language:** test names, descriptions and comments are in English.
 
 ## Run and check why tests are red
 

@@ -21,8 +21,7 @@ and define when you are done. Spec, tests and verify command are in your task. R
 - **Your own tests** for business logic go outside the acceptance test directory.
 - **You're done** only when the verify command is green – while it is red, werkstatt
   sends you back to work. An independent review then checks your change against the spec.
-- **Language:** write your messages in the language of the spec. Identifiers and comments
-  follow `AGENTS.md` and the existing code.
+- **Language:** write your messages, comments and identifiers in English.
 
 You work unattended; nobody answers questions. If you can't continue without a decision
 by the user – for example because an acceptance test contradicts the spec – stop and

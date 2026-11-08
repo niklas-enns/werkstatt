@@ -58,7 +58,7 @@ flowchart LR
    - The **reviewer** checks the change independently against the spec and conventions. If something is wrong, its findings go into another round.
 4. **Decide** – If the spec leaves something open, werkstatt asks you in the terminal at the end. Your decision is recorded in the spec.
 
-werkstatt's own instructions are in English. The interview, the spec and the reviews follow the language you write in.
+Everything werkstatt and its agents produce is in English – the interview, specs, tests and reviews.
 
 ## What's inside
 
