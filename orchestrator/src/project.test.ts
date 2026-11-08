@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { Project } from "./project.js";
+import { addDecisionsToSpec } from "./run.js";
 
 const TEST = "tests/acceptance/Spec001FooTest.java";
 let root: string;
@@ -20,7 +21,7 @@ beforeEach(() => {
   write("werkstatt.json", JSON.stringify({
     specs: "docs/specs", acceptanceTests: "tests/acceptance", commands: { verify: "true" },
   }));
-  write("docs/specs/001-termine.md", "---\nid: 001\ntitel: Termine\nstatus: freigegeben   # entwurf | freigegeben\n---\n\n# 001\n");
+  write("docs/specs/001-appointments.md", "---\nid: 001\ntitle: Appointments\nstatus: approved   # draft | approved\n---\n\n# 001\n");
   write(TEST, "original");
   project = Project.load(root);
 });
@@ -28,12 +29,12 @@ beforeEach(() => {
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 test("spec reads id, title and status from the front matter", () => {
-  assert.deepEqual(project.spec("1"), { id: "001", path: "docs/specs/001-termine.md", title: "Termine", status: "freigegeben" });
+  assert.deepEqual(project.spec("1"), { id: "001", path: "docs/specs/001-appointments.md", title: "Appointments", status: "approved" });
 });
 
 test("spec reads front matter with CRLF line endings", () => {
-  write("docs/specs/002-crlf.md", "---\r\nid: 002\r\ntitel: Crlf\r\nstatus: entwurf\r\n---\r\n");
-  assert.deepEqual(project.spec("002"), { id: "002", path: "docs/specs/002-crlf.md", title: "Crlf", status: "entwurf" });
+  write("docs/specs/002-crlf.md", "---\r\nid: 002\r\ntitle: Crlf\r\nstatus: draft\r\n---\r\n");
+  assert.deepEqual(project.spec("002"), { id: "002", path: "docs/specs/002-crlf.md", title: "Crlf", status: "draft" });
 });
 
 test("acceptance tests are found by Spec<NNN> in the file name, ignoring case", () => {
@@ -59,4 +60,20 @@ test("lock and discard manage the hook's locks", () => {
   project.discard([TEST]);
   assert.deepEqual(project.locks().locked, []);
   assert.equal(existsSync(join(root, TEST)), false);
+});
+
+test("decisions are appended under a Decisions heading, later ones are skipped", () => {
+  const spec = project.spec("001");
+  addDecisionsToSpec(project, spec, [
+    { question: "Round half up?", kind: "confirmed" },
+    { question: "Reject negative amounts?", kind: "changed", text: "Yes, exit code 2." },
+    { question: "Currency symbol?", kind: "later" },
+  ]);
+  addDecisionsToSpec(project, spec, [{ question: "Max amount?", kind: "changed", text: "1,000,000" }]);
+  const text = read(spec.path);
+  assert.equal(text.match(/## Decisions/g)?.length, 1);
+  assert.match(text, /- Round half up\?\n  \*\*Decision \(\d{4}-\d{2}-\d{2}\):\*\* As implemented\./);
+  assert.match(text, /Reject negative amounts\?\n  \*\*Decision .*:\*\* Yes, exit code 2\./);
+  assert.match(text, /Max amount\?/);
+  assert.doesNotMatch(text, /Currency symbol/);
 });

@@ -32,7 +32,7 @@ export class Project {
   static load(root: string): Project {
     const file = join(root, "werkstatt.json");
     if (!existsSync(file)) {
-      throw new Error(`Keine werkstatt.json in ${root} – zuerst /werkstatt:project-init ausführen.`);
+      throw new Error(`No werkstatt.json in ${root} – run /werkstatt:project-init first.`);
     }
     return new Project(root, JSON.parse(readFileSync(file, "utf8")));
   }
@@ -41,11 +41,11 @@ export class Project {
     const number = id.padStart(3, "0");
     const dir = join(this.root, this.config.specs);
     const file = existsSync(dir) ? readdirSync(dir).find((f) => f.startsWith(`${number}-`) && f.endsWith(".md")) : undefined;
-    if (!file) throw new Error(`Keine Spec ${number} in ${this.config.specs}/.`);
+    if (!file) throw new Error(`No spec ${number} in ${this.config.specs}/.`);
     const path = join(dir, file);
     const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(readFileSync(path, "utf8"))?.[1] ?? "";
     const field = (name: string) => new RegExp(`^${name}:[ \\t]*([^#\\r\\n]*)`, "m").exec(frontmatter)?.[1].trim() ?? "";
-    return { id: number, path: relative(this.root, path), title: field("titel"), status: field("status") };
+    return { id: number, path: relative(this.root, path), title: field("title"), status: field("status") };
   }
 
   /** Acceptance test files belonging to a spec, identified by `Spec<NNN>` in the file name, in any case. */
@@ -67,7 +67,7 @@ export class Project {
       cwd: this.root, shell: true, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout: VERIFY_TIMEOUT_MS,
     });
     const lines = `${r.stdout ?? ""}${r.stderr ?? ""}`.split("\n");
-    if (r.error) lines.push(`werkstatt: verify abgebrochen – ${r.error.message}`);
+    if (r.error) lines.push(`werkstatt: verify aborted – ${r.error.message}`);
     return { ok: r.status === 0, output: lines.slice(-80).join("\n") };
   }
 

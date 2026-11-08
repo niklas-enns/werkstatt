@@ -12,8 +12,8 @@ export interface RunOptions extends SessionOptions {
 
 export interface Decision {
   question: string;
-  kind: "bestätigt" | "geändert" | "später";
-  /** The user's decision, for kind "geändert". */
+  kind: "confirmed" | "changed" | "later";
+  /** The user's decision, for kind "changed". */
   text?: string;
 }
 
@@ -25,7 +25,7 @@ interface Phase {
 }
 
 interface Review {
-  verdict: "BESTANDEN" | "NACHBESSERN";
+  verdict: "PASSED" | "NEEDS_WORK";
   summary: string;
   findings: { location: string; reference: string; problem: string; blocking: boolean }[];
   questions: string[];
@@ -35,26 +35,26 @@ const REVIEW_SCHEMA = {
   type: "object",
   required: ["verdict", "summary", "findings", "questions"],
   properties: {
-    verdict: { type: "string", enum: ["BESTANDEN", "NACHBESSERN"] },
-    summary: { type: "string", description: "Gesamteinschätzung in wenigen Sätzen" },
+    verdict: { type: "string", enum: ["PASSED", "NEEDS_WORK"] },
+    summary: { type: "string", description: "Overall assessment in a few sentences" },
     findings: {
       type: "array",
       items: {
         type: "object",
         required: ["location", "reference", "problem", "blocking"],
         properties: {
-          location: { type: "string", description: "Datei:Zeile" },
-          reference: { type: "string", description: "AK-ID, Regel der Spec oder Abschnitt der AGENTS.md" },
-          problem: { type: "string", description: "Problem und was stattdessen erwartet wird" },
-          blocking: { type: "boolean", description: "true, wenn eine Nachbesserung nötig ist" },
+          location: { type: "string", description: "file:line" },
+          reference: { type: "string", description: "AC ID, rule of the spec, or section of AGENTS.md" },
+          problem: { type: "string", description: "The problem and what is expected instead" },
+          blocking: { type: "boolean", description: "true if the implementation must be reworked" },
         },
       },
     },
     questions: {
       type: "array",
       items: { type: "string" },
-      description: "Punkte, die die Spec offen lässt und der Nutzer entscheiden muss. Jede Frage für sich verständlich: " +
-        "was die Spec offen lässt, wie es jetzt umgesetzt ist, welche Alternative es gäbe.",
+      description: "Points the spec leaves open that the user has to decide. Each question must stand on its own: " +
+        "what the spec leaves open, how it is implemented now, and what the alternative would be.",
     },
   },
 };
@@ -69,18 +69,18 @@ const TESTS_SCHEMA = {
   type: "object",
   required: ["ok", "reason", "tests"],
   properties: {
-    ok: { type: "boolean", description: "false, wenn die Spec sich nicht sauber in Tests übersetzen lässt" },
-    reason: { type: "string", description: "Bei ok=false: die Lücke in der Spec und ein Vorschlag. Sonst eine kurze Zusammenfassung." },
+    ok: { type: "boolean", description: "false if the spec cannot be translated cleanly into tests" },
+    reason: { type: "string", description: "If ok=false: the gap in the spec and a proposal. Otherwise a short summary." },
     tests: {
       type: "array",
-      description: "Ein Eintrag pro Akzeptanzkriterium",
+      description: "One entry per acceptance criterion",
       items: {
         type: "object",
         required: ["criterion", "test", "redBecause"],
         properties: {
-          criterion: { type: "string", description: "AK-ID, z. B. AK-3" },
-          test: { type: "string", description: "Testklasse und -methode" },
-          redBecause: { type: "string", description: "Warum der Test ohne Implementierung fehlschlägt, in Stichworten" },
+          criterion: { type: "string", description: "AC ID, e.g. AC-3" },
+          test: { type: "string", description: "Test class and method" },
+          redBecause: { type: "string", description: "Why the test fails without an implementation, in a few words" },
         },
       },
     },
@@ -91,7 +91,7 @@ export interface RunRecord {
   spec: string;
   startedAt: string;
   finishedAt?: string;
-  outcome: "freigegeben" | "abgebrochen" | "gescheitert";
+  outcome: "done" | "aborted" | "failed";
   reason: string;
   phases: Phase[];
   costUsd: number;
@@ -108,7 +108,7 @@ export interface RunRecord {
 export async function run(project: Project, specId: string, options: RunOptions): Promise<RunRecord> {
   const spec = project.spec(specId);
   const record: RunRecord = {
-    spec: spec.id, startedAt: new Date().toISOString(), outcome: "abgebrochen", reason: "", phases: [], costUsd: 0, changedFiles: [], decisions: [], openQuestions: [],
+    spec: spec.id, startedAt: new Date().toISOString(), outcome: "aborted", reason: "", phases: [], costUsd: 0, changedFiles: [], decisions: [], openQuestions: [],
   };
   const finish = (outcome: RunRecord["outcome"], reason: string) => {
     record.outcome = outcome;
@@ -121,13 +121,13 @@ export async function run(project: Project, specId: string, options: RunOptions)
   };
 
   // Preconditions
-  if (spec.status !== "freigegeben") {
-    return finish("abgebrochen", `Spec ${spec.id} hat den Status "${spec.status}", nicht "freigegeben".`);
+  if (spec.status !== "approved") {
+    return finish("aborted", `Spec ${spec.id} has status "${spec.status}", not "approved".`);
   }
   const dirty = project.dirtyFiles();
   if (dirty.length && !options.allowDirty) {
-    return finish("abgebrochen", "Uncommittete Änderungen – erst committen, damit die Änderungen des Laufs eindeutig sind " +
-      `(oder --allow-dirty):\n${dirty.join("\n")}`);
+    return finish("aborted", "Uncommitted changes – commit first so the changes of this run are clear " +
+      `(or use --allow-dirty):\n${dirty.join("\n")}`);
   }
   const base = project.head();
   log("run", `Spec ${spec.id} – ${spec.title}`);
@@ -137,7 +137,7 @@ export async function run(project: Project, specId: string, options: RunOptions)
     // Tests not written by the test-writer (or never locked) must be locked before anyone implements.
     const locked = project.lock();
     record.phases.push({
-      name: "tests", verdict: "skipped", note: "Akzeptanztests vorhanden" + (locked.length ? `, jetzt gesperrt: ${locked.join(", ")}` : "."),
+      name: "tests", verdict: "skipped", note: "Acceptance tests exist" + (locked.length ? `, now locked: ${locked.join(", ")}` : "."),
     });
   } else {
     const session = await runSession(project, "tests", testsPrompt(project, spec), testWriter(project, TESTS_SCHEMA), options);
@@ -149,23 +149,23 @@ export async function run(project: Project, specId: string, options: RunOptions)
       // Partial tests would be locked and make the next run skip this phase.
       project.discard(tests);
       phase.verdict = "failed";
-      phase.note = (result?.reason ?? session.finalText) + (tests.length ? `\n\nVerworfene Testdateien: ${tests.join(", ")}` : "");
-      return finish("abgebrochen", `Keine Akzeptanztests für Spec ${spec.id}:\n\n${phase.note}`);
+      phase.note = (result?.reason ?? session.finalText) + (tests.length ? `\n\nDiscarded test files: ${tests.join(", ")}` : "");
+      return finish("aborted", `No acceptance tests for spec ${spec.id}:\n\n${phase.note}`);
     }
     log("tests", result.tests.map((t) => `${t.criterion} → ${t.test}`).join(" | "));
     const { locked } = project.locks();
     const unlocked = tests.filter((t) => !locked.includes(t));
-    phase.note = `${tests.length} Testdatei(en)` + (unlocked.length ? `, NICHT gesperrt: ${unlocked.join(", ")}` : ", gesperrt.");
+    phase.note = `${tests.length} test file(s)` + (unlocked.length ? `, NOT locked: ${unlocked.join(", ")}` : ", locked.");
     if (unlocked.length) {
       phase.verdict = "failed";
-      return finish("gescheitert", `Akzeptanztests wurden nicht gesperrt – läuft das Plugin mit seinen Hooks?\n${unlocked.join("\n")}`);
+      return finish("failed", `Acceptance tests were not locked – is the plugin running with its hooks?\n${unlocked.join("\n")}`);
     }
   }
 
   // Our own copy: the lock manifest lives in the project, where an agent could delete it.
   const tests = project.snapshot(project.acceptanceTests(spec));
   const before = project.verify();
-  if (before.ok) log("run", "verify ist bereits grün – die Tests prüfen evtl. zu wenig, oder die Spec ist schon umgesetzt.");
+  if (before.ok) log("run", "verify is already green – the tests may check too little, or the spec is already implemented.");
 
   // Phase 2+3: implement, check, review – retried with the findings as feedback.
   // The user's answers to open review questions may add one more round.
@@ -181,69 +181,69 @@ export async function run(project: Project, specId: string, options: RunOptions)
     if (tampered.length) project.lock();
     const verify = project.verify();
     const problems = [
-      tampered.length && `Gesperrte Akzeptanztests verändert oder gelöscht (wiederhergestellt): ${tampered.join(", ")}`,
-      !verify.ok && `verify ist rot:\n${verify.output}`,
+      tampered.length && `Locked acceptance tests were changed or deleted (restored): ${tampered.join(", ")}`,
+      !verify.ok && `verify is red:\n${verify.output}`,
     ].filter(Boolean) as string[];
     if (problems.length) {
       phase.note = problems.join("\n\n");
-      log("run", `Versuch ${attempt}: ${problems.map((p) => p.split("\n")[0]).join(" | ")}`);
+      log("run", `Attempt ${attempt}: ${problems.map((p) => p.split("\n")[0]).join(" | ")}`);
       if (session.outcome !== "success") {
-        return finish("gescheitert", `Session endete mit ${session.outcome}.\n\n${phase.note}`);
+        return finish("failed", `Session ended with ${session.outcome}.\n\n${phase.note}`);
       }
-      feedback = `${phase.note}\n\nLetzte Nachricht des vorigen Versuchs:\n${session.finalText}`;
+      feedback = `${phase.note}\n\nLast message of the previous attempt:\n${session.finalText}`;
       continue;
     }
     phase.verdict = "ok";
-    phase.note = "verify grün, Akzeptanztests unverändert.";
+    phase.note = "verify green, acceptance tests unchanged.";
 
     const reviewSession = await runSession(project, `review ${of}`, reviewPrompt(project, spec, base), reviewer(REVIEW_SCHEMA), options);
     const review = reviewSession.structured as Review | undefined;
     const report = review ? formatReview(spec, attempt, review) : reviewSession.finalText;
     const file = saveReview(project, record, attempt, report);
     record.phases.push({
-      name: `review-${attempt}`, session: reviewSession, verdict: review?.verdict === "BESTANDEN" ? "ok" : "failed", note: file,
+      name: `review-${attempt}`, session: reviewSession, verdict: review?.verdict === "PASSED" ? "ok" : "failed", note: file,
     });
     if (!review) {
-      return finish("gescheitert", `Der Reviewer hat kein Urteil geliefert (Session: ${reviewSession.outcome}). Text: ${file}`);
+      return finish("failed", `The reviewer delivered no verdict (session: ${reviewSession.outcome}). Text: ${file}`);
     }
-    if (review.verdict === "BESTANDEN") {
+    if (review.verdict === "PASSED") {
       record.openQuestions = review.questions;
       if (review.questions.length && options.decide && !record.decisions.length) {
         const decisions = await options.decide(review.questions);
         record.decisions = decisions;
-        record.openQuestions = decisions.filter((d) => d.kind === "später").map((d) => d.question);
+        record.openQuestions = decisions.filter((d) => d.kind === "later").map((d) => d.question);
         addDecisionsToSpec(project, spec, decisions);
-        const changes = decisions.filter((d) => d.kind === "geändert");
+        const changes = decisions.filter((d) => d.kind === "changed");
         if (changes.length) {
           limit = attempt + 1;
-          feedback = "Der Nutzer hat offene Fragen entschieden (siehe Abschnitt „Entscheidungen“ der Spec). " +
-            "Passe die Umsetzung daran an:\n\n" + changes.map((d) => `- ${d.question}\n  Entscheidung: ${d.text}`).join("\n");
-          log("run", `${changes.length} Entscheidung(en) erfordern eine weitere Runde.`);
+          feedback = "The user has decided open questions (see the \"Decisions\" section of the spec). " +
+            "Adapt the implementation accordingly:\n\n" + changes.map((d) => `- ${d.question}\n  Decision: ${d.text}`).join("\n");
+          log("run", `${changes.length} decision(s) require another round.`);
           continue;
         }
       }
-      return finish("freigegeben", `Spec ${spec.id} umgesetzt, verify grün, Review bestanden. Review: ${file}`);
+      return finish("done", `Spec ${spec.id} implemented, verify green, review passed. Review: ${file}`);
     }
-    log("run", `Versuch ${attempt}: Review verlangt Nachbesserung.`);
-    // A NACHBESSERN without blocking findings still needs something to act on.
+    log("run", `Attempt ${attempt}: the review requires rework.`);
+    // A NEEDS_WORK without blocking findings still needs something to act on.
     const blocking = review.findings.filter((f) => f.blocking);
     const findings = blocking.length ? blocking : review.findings;
-    feedback = `Das Review verlangt Nachbesserungen:\n\n${review.summary}\n\n` +
+    feedback = `The review requires rework:\n\n${review.summary}\n\n` +
       findings.map((f) => `- ${f.location} (${f.reference}): ${f.problem}`).join("\n");
   }
-  return finish("gescheitert", `Nach ${limit} Versuchen nicht freigegeben.\n\n${feedback}`);
+  return finish("failed", `Not done after ${limit} attempts.\n\n${feedback}`);
 }
 
 /** Records the user's decisions in the spec, so later reviews don't raise them again. */
 export function addDecisionsToSpec(project: Project, spec: Spec, decisions: Decision[]) {
-  const decided = decisions.filter((d) => d.kind !== "später");
+  const decided = decisions.filter((d) => d.kind !== "later");
   if (!decided.length) return;
   const date = new Date().toISOString().slice(0, 10);
   const lines = decided.map((d) =>
-    `- ${d.question}\n  **Entscheidung (${date}):** ${d.kind === "bestätigt" ? "So, wie umgesetzt." : d.text}`).join("\n");
+    `- ${d.question}\n  **Decision (${date}):** ${d.kind === "confirmed" ? "As implemented." : d.text}`).join("\n");
   const path = join(project.root, spec.path);
   const text = readFileSync(path, "utf8").trimEnd();
-  const heading = "## Entscheidungen";
+  const heading = "## Decisions";
   const at = text.indexOf(`\n${heading}\n`);
   if (at < 0) {
     writeFileSync(path, `${text}\n\n${heading}\n\n${lines}\n`);
@@ -255,51 +255,51 @@ export function addDecisionsToSpec(project: Project, spec: Spec, decisions: Deci
 }
 
 function testsPrompt(project: Project, spec: Spec): string {
-  return `Leite die Akzeptanztests für Spec ${spec.id} ab: ${spec.path}
+  return `Derive the acceptance tests for spec ${spec.id}: ${spec.path}
 
-Testordner: ${project.config.acceptanceTests}
-Jeder Dateiname enthält: Spec${spec.id}
-Prüfbefehl: ${project.config.commands.verify}`;
+Test directory: ${project.config.acceptanceTests}
+Every file name contains: Spec${spec.id}
+Verify command: ${project.config.commands.verify}`;
 }
 
 function implementPrompt(project: Project, spec: Spec, feedback: string): string {
   const tests = project.acceptanceTests(spec).map((t) => `- ${t}`).join("\n");
-  return `Setze Spec ${spec.id} um: ${spec.path}
+  return `Implement spec ${spec.id}: ${spec.path}
 
-Gesperrte Akzeptanztests:
+Locked acceptance tests:
 ${tests}
 
-Prüfbefehl: ${project.config.commands.verify}
-${feedback ? `\nDer bisherige Stand ist noch nicht abgenommen. Rückmeldung:\n\n${feedback}\n` : ""}`;
+Verify command: ${project.config.commands.verify}
+${feedback ? `\nThe current state has not been accepted yet. Feedback:\n\n${feedback}\n` : ""}`;
 }
 
 function reviewPrompt(project: Project, spec: Spec, base: string): string {
   const changed = project.dirtyFiles().map((line) => `- ${line}`).join("\n");
-  return `Prüfe die Umsetzung von Spec ${spec.id}: ${spec.path}
+  return `Review the implementation of spec ${spec.id}: ${spec.path}
 
-Ausgangs-Commit: ${base}
-Geänderte Dateien (git status):
+Base commit: ${base}
+Changed files (git status):
 ${changed}
 
-\`${project.config.commands.verify}\` ist grün, die Akzeptanztests sind unverändert.`;
+\`${project.config.commands.verify}\` is green, the acceptance tests are unchanged.`;
 }
 
 function formatReview(spec: Spec, attempt: number, review: Review): string {
   const findings = (blocking: boolean) =>
     review.findings.filter((f) => f.blocking === blocking)
-      .map((f) => `- **${f.location}** (${f.reference}): ${f.problem}`).join("\n") || "- keine";
-  return `# Review Spec ${spec.id}, Versuch ${attempt}: ${review.verdict}
+      .map((f) => `- **${f.location}** (${f.reference}): ${f.problem}`).join("\n") || "- none";
+  return `# Review spec ${spec.id}, attempt ${attempt}: ${review.verdict}
 
 ${review.summary}
 
-## Befunde, die eine Nachbesserung erfordern
+## Findings that require rework
 ${findings(true)}
 
-## Hinweise
+## Notes
 ${findings(false)}
 
-## Offene Fragen an den Nutzer
-${review.questions.map((q) => `- ${q}`).join("\n") || "- keine"}
+## Open questions for the user
+${review.questions.map((q) => `- ${q}`).join("\n") || "- none"}
 `;
 }
 

@@ -1,9 +1,9 @@
 {
   "version": 1,
   "specs": "docs/specs",
-  "acceptanceTests": "<Pfad zum Akzeptanztest-Ordner>",
+  "acceptanceTests": "<path to the acceptance test directory>",
   "commands": {
-    "verify": "<Prüfbefehl: baut und führt alle Tests aus>",
-    "run": "<Startbefehl oder null>"
+    "verify": "<verify command: builds and runs all tests>",
+    "run": "<run command or null>"
   }
 }

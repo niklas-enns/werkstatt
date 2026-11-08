@@ -1,66 +1,71 @@
 ---
 name: spec-interview
-description: Macht aus einem groben Ticket oder einer Idee eine prüfbare Spec, indem der Nutzer gezielt befragt wird. Verwenden, wenn ein neues Feature spezifiziert werden soll, bevor Code oder Tests entstehen.
-argument-hint: <Ticket-Text oder Feature-Idee>
+description: Turns a rough ticket or idea into a testable spec by interviewing the user. Use when a new feature should be specified before any code or tests exist.
+argument-hint: <ticket text or feature idea>
 ---
 
-# Spec-Interview
+# Spec interview
 
-Dein Ergebnis ist **eine Spec-Datei**, kein Code und keine Tests. Der Nutzer
-entscheidet über alles Fachliche – du stellst die richtigen Fragen und schreibst
-sauber auf.
+Your result is **one spec file** – no code, no tests. The user decides everything about
+the domain; you ask the right questions and write it down cleanly.
 
-Auftrag: $ARGUMENTS
+Task: $ARGUMENTS
 
-## Ablauf
+## Language
 
-1. **Kontext lesen**
-   - `AGENTS.md` (bzw. `CLAUDE.md`) des Projekts.
-   - `werkstatt.json`: Der Spec-Ordner steht unter `specs` (Standard `docs/specs`).
-   - Bestehende Specs im Spec-Ordner, um Begriffe, Nummerierung und Abhängigkeiten zu kennen.
-   - Code nur so weit, wie nötig, um vorhandenes Verhalten nicht falsch zu beschreiben.
+Run the interview in the language the user writes in, and write the spec's content in
+that language. The format keywords stay in English exactly as in the template, because
+werkstatt parses them: front matter keys and status values, section headings, AC IDs
+and **Given** / **When** / **Then**.
 
-2. **Lücken finden** – gehe die Prüfliste unten durch und notiere für dich, was der
-   Auftrag offen lässt. Triff keine fachlichen Annahmen stillschweigend.
+## Procedure
 
-3. **Befragen** – in Runden von höchstens 4 Fragen (AskUserQuestion), wichtigste zuerst.
-   - Biete konkrete Antwortoptionen an, mit einer Empfehlung, wenn du eine hast.
-   - Frage nach Beispielen mit echten Werten ("Was passiert, wenn …?"), nicht nach Abstraktem.
-   - Höre auf, wenn jedes Akzeptanzkriterium eindeutig prüfbar ist. Lieber eine Runde
-     weniger und offene Punkte unter "Offene Fragen" sammeln.
+1. **Read the context**
+   - The project's `AGENTS.md` (or `CLAUDE.md`).
+   - `werkstatt.json`: the spec directory is under `specs` (default `docs/specs`).
+   - Existing specs in the spec directory, to learn terms, numbering and dependencies.
+   - Code only as far as needed to avoid describing existing behaviour wrongly.
 
-4. **Spec schreiben** nach `<Spec-Ordner>/NNN-<slug>.md` (nächste freie Nummer, dreistellig)
-   anhand von [spec-template.md](spec-template.md). Status ist immer `entwurf`.
+2. **Find the gaps** – go through the checklist below and note for yourself what the
+   task leaves open. Don't make silent assumptions about the domain.
 
-5. **Übergeben** – fasse in wenigen Zeilen zusammen, was spezifiziert ist, was offen
-   bleibt und was der Nutzer vor der Freigabe prüfen sollte. Nur der Nutzer setzt
-   den Status auf `freigegeben`. Nenne danach genau diese nächsten Schritte:
-   1. Spec prüfen und im Kopf der Datei `status: freigegeben` setzen.
-   2. Committen.
-   3. Im Terminal `werkstatt run <Nummer>` ausführen – der Orchestrator leitet die
-      Akzeptanztests ab, implementiert und lässt reviewen.
+3. **Interview** – in rounds of at most 4 questions (AskUserQuestion), most important
+   first.
+   - Offer concrete answer options, with a recommendation if you have one.
+   - Ask for examples with real values ("What happens if …?"), not for abstractions.
+   - Stop when every acceptance criterion is unambiguously testable. Better one round
+     fewer, collecting what's left under "Open questions".
 
-   Schlage nicht vor, Tests abzuleiten oder selbst zu implementieren – das übernimmt
-   der Orchestrator.
+4. **Write the spec** to `<spec directory>/NNN-<slug>.md` (next free number, three
+   digits) based on [spec-template.md](spec-template.md). The status is always `draft`.
 
-## Prüfliste
+5. **Hand over** – summarise in a few lines what is specified, what remains open and
+   what the user should check before approving. Only the user sets the status to
+   `approved`. Then name exactly these next steps:
+   1. Review the spec and set `status: approved` in its front matter.
+   2. Commit.
+   3. Run `werkstatt run <number>` in a terminal – the orchestrator derives the
+      acceptance tests, implements and has the result reviewed.
 
-- **Ziel**: Welches Problem löst das Feature, für wen?
-- **Akteure und Rechte**: Wer darf was? Was passiert bei fehlender Berechtigung?
-- **Regeln**: Grenzwerte, Fristen, Zustandsübergänge, Berechnungen.
-- **Randfälle**: leere Eingaben, Maximalwerte, Gleichstand, Gleichzeitigkeit, Zeitzonen,
-  Zeitpunkte in der Vergangenheit.
-- **Fehlerfälle**: Was sieht der Aufrufer bei ungültiger Eingabe?
-- **Schnittstelle**: Über welche Aufrufe wird das Verhalten ausgelöst und beobachtet
-  (z. B. Endpunkte, Payloads, Statuscodes)? Schlage einen konkreten Entwurf vor, passend
-  zu vorhandenen Schnittstellen, und lass ihn bestätigen – Akzeptanztests werden dagegen
-  geschrieben.
-- **Abgrenzung**: Was ausdrücklich *nicht* Teil dieses Features ist.
+   Don't offer to derive tests or to implement yourself – the orchestrator does that.
 
-## Regeln für Akzeptanzkriterien
+## Checklist
 
-- Jedes Kriterium hat eine stabile ID (`AK-1`, `AK-2`, …), auf die Tests später verweisen.
-- Form: **Gegeben** … **Wenn** … **Dann** …, mit konkreten Werten.
-- Ein Kriterium prüft genau ein Verhalten.
-- Beschreibe beobachtbares Verhalten (Schnittstelle, Antwort, Zustand), keine Implementierung.
-- Jedes Kriterium ist allein über die Aufrufe im Abschnitt **Schnittstelle** prüfbar.
+- **Goal**: Which problem does the feature solve, and for whom?
+- **Actors and permissions**: Who may do what? What happens without permission?
+- **Rules**: Limits, deadlines, state transitions, calculations.
+- **Edge cases**: empty input, maximum values, ties, concurrency, time zones, points in
+  time in the past.
+- **Error cases**: What does the caller see on invalid input?
+- **Interface**: Which calls trigger and observe the behaviour (e.g. endpoints,
+  payloads, status codes)? Propose a concrete design that fits existing interfaces and
+  have it confirmed – the acceptance tests are written against it.
+- **Out of scope**: What is explicitly *not* part of this feature.
+
+## Rules for acceptance criteria
+
+- Every criterion has a stable ID (`AC-1`, `AC-2`, …) that tests refer to later.
+- Form: **Given** … **When** … **Then** …, with concrete values.
+- A criterion checks exactly one behaviour.
+- Describe observable behaviour (interface, response, state), not the implementation.
+- Every criterion can be checked using only the calls in the **Interface** section.

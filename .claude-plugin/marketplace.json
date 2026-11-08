@@ -1,6 +1,6 @@
 {
   "name": "werkstatt",
-  "description": "werkstatt – Harness für spezifikationsgetriebene Entwicklung mit Coding-Agents",
+  "description": "werkstatt – a harness for spec-driven development with coding agents",
   "owner": {
     "name": "Niklas Enns"
   },
@@ -8,7 +8,7 @@
     {
       "name": "werkstatt",
       "source": "./",
-      "description": "Werkzeuge für agentische Softwareentwicklung"
+      "description": "Tools for agentic software development"
     }
   ]
 }

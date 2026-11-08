@@ -137,14 +137,14 @@ def hook_pre_tool(p: Project, data: dict):
     if tool == "Bash":
         cmd = inp.get("command", "")
         if re.search(r"werkstatt(\.py)?\s+unlock\b", cmd):
-            return deny("werkstatt: Entsperren ist dem Nutzer vorbehalten.")
+            return deny("werkstatt: Only the user may unlock acceptance tests.")
         touches = [x for x in [p.acceptance, ".werkstatt", "werkstatt.json"] if x in cmd]
         touches += [r for r in locked if Path(r).name in cmd]
         if touches and MUTATING_SHELL.search(cmd):
-            return deny("werkstatt: Dieser Befehl würde geschützte Dateien verändern "
-                        f"({', '.join(sorted(set(touches)))}). Akzeptanztests werden nicht "
-                        "angepasst, um grün zu werden. Ist ein Test falsch: stoppen und "
-                        "den Nutzer informieren.")
+            return deny("werkstatt: This command would change protected files "
+                        f"({', '.join(sorted(set(touches)))}). Acceptance tests are not "
+                        "adapted to make them pass. If a test is wrong: stop and tell "
+                        "the user.")
         return
 
     path = inp.get("file_path") or inp.get("notebook_path")
@@ -154,12 +154,11 @@ def hook_pre_tool(p: Project, data: dict):
     if rel is None:
         return
     if rel == "werkstatt.json" or rel.startswith(".werkstatt/"):
-        return deny(f"werkstatt: {rel} wird von der werkstatt verwaltet und ist für "
-                    "Agents gesperrt.")
+        return deny(f"werkstatt: {rel} is managed by werkstatt and locked for agents.")
     if rel in locked:
-        return deny(f"werkstatt: {rel} ist ein gesperrter Akzeptanztest. Passe die "
-                    "Implementierung an, nicht den Test. Ist der Test falsch: stoppen "
-                    "und den Nutzer informieren – nur er kann entsperren.")
+        return deny(f"werkstatt: {rel} is a locked acceptance test. Change the "
+                    "implementation, not the test. If the test is wrong: stop and tell "
+                    "the user – only they can unlock it.")
 
 
 def restore_tampered(p: Project) -> list[str]:
@@ -191,7 +190,7 @@ def run_verify(p: Project) -> tuple[bool, str]:
         r = subprocess.run(p.verify, shell=True, cwd=p.root, capture_output=True,
                            text=True, timeout=VERIFY_TIMEOUT)
     except subprocess.TimeoutExpired:
-        return False, f"Zeitüberschreitung nach {VERIFY_TIMEOUT}s"
+        return False, f"timed out after {VERIFY_TIMEOUT}s"
     out = (r.stdout + r.stderr).splitlines()
     return r.returncode == 0, "\n".join(out[-OUTPUT_TAIL:])
 
@@ -200,14 +199,14 @@ def hook_stop(p: Project, data: dict):
     restored = restore_tampered(p)
     lock_new(p)
     if restored:
-        return block("werkstatt: Gesperrte Akzeptanztests wurden verändert und "
-                     "wiederhergestellt:\n" + "\n".join(f"- {r}" for r in restored) +
-                     "\nPasse die Implementierung an, nicht die Tests. Ist ein Test falsch: "
-                     "erklären, warum – nur der Nutzer kann entsperren.")
+        return block("werkstatt: Locked acceptance tests were changed and have been "
+                     "restored:\n" + "\n".join(f"- {r}" for r in restored) +
+                     "\nChange the implementation, not the tests. If a test is wrong: "
+                     "explain why – only the user can unlock it.")
 
     if os.environ.get("WERKSTATT_PHASE") != "implement":
         return
-    session = re.sub(r"[^A-Za-z0-9_-]", "_", str(data.get("session_id") or "unbekannt"))
+    session = re.sub(r"[^A-Za-z0-9_-]", "_", str(data.get("session_id") or "unknown"))
     counter = p.state(f"verify-blocks-{session}")
     ok, out = run_verify(p)
     if ok:
@@ -217,22 +216,22 @@ def hook_stop(p: Project, data: dict):
     if blocks > MAX_VERIFY_BLOCKS:
         # The orchestrator checks verify itself; endless blocking would only burn turns.
         counter.unlink(missing_ok=True)
-        return emit({"systemMessage": f"werkstatt: `{p.verify}` ist nach "
-                     f"{MAX_VERIFY_BLOCKS} Sperren noch rot – die Session darf enden."})
+        return emit({"systemMessage": f"werkstatt: `{p.verify}` is still red after "
+                     f"{MAX_VERIFY_BLOCKS} blocks – the session may end."})
     counter.write_text(str(blocks))
-    block(f"werkstatt: `{p.verify}` ist rot ({blocks}/{MAX_VERIFY_BLOCKS}). Behebe die "
-          "Ursache, ohne Akzeptanztests anzufassen. Kommst du ohne eine Entscheidung des "
-          f"Nutzers nicht weiter, beschreibe genau, was entschieden werden muss.\n\n{out}")
+    block(f"werkstatt: `{p.verify}` is red ({blocks}/{MAX_VERIFY_BLOCKS}). Fix the cause "
+          "without touching acceptance tests. If you can't continue without a decision by "
+          f"the user, describe exactly what needs to be decided.\n\n{out}")
 
 
 # --- user commands ---------------------------------------------------------
 
 def cmd_status(p: Project, args: list[str]):
     broken = set(tampered(p))
-    print(f"Projekt: {p.root}")
-    print("Gesperrte Akzeptanztests:")
+    print(f"Project: {p.root}")
+    print("Locked acceptance tests:")
     for rel in p.manifest():
-        print(f"  {rel}{'  (VERÄNDERT)' if rel in broken else ''}")
+        print(f"  {rel}{'  (CHANGED)' if rel in broken else ''}")
 
 
 def cmd_check(p: Project, args: list[str]):
@@ -245,17 +244,17 @@ def cmd_lock(p: Project, args: list[str]):
 
 def cmd_unlock(p: Project, args: list[str]):
     if not args:
-        sys.exit("Aufruf: unlock <Pfad oder Namensteil>...")
+        sys.exit("Usage: unlock <path or part of a name>...")
     locked = p.manifest()
     hits = [r for r in locked if any(a in r for a in args)]
     for rel in hits:
         del locked[rel]
         p.locked_copy(rel).unlink(missing_ok=True)
-        print(f"entsperrt: {rel}")
+        print(f"unlocked: {rel}")
     if hits:
         p.save_manifest(locked)
     else:
-        print("Nichts gefunden.")
+        print("Nothing found.")
 
 
 HOOKS = {
@@ -283,11 +282,11 @@ def main():
             HOOKS[name](p, data)
         except Exception as e:
             # A broken hook must not lock the user out; report and let Claude continue.
-            emit({"systemMessage": f"werkstatt: Hook {name} fehlgeschlagen: {e}"})
+            emit({"systemMessage": f"werkstatt: hook {name} failed: {e}"})
         return
     p = Project.find(None)
     if p is None:
-        sys.exit("Keine werkstatt.json gefunden.")
+        sys.exit("No werkstatt.json found.")
     COMMANDS[name](p, sys.argv[2:])
 
 

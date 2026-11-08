@@ -5,22 +5,22 @@ import { parseArgs } from "node:util";
 import { HOOK_SCRIPT, Project } from "./project.js";
 import { run, type Decision } from "./run.js";
 
-const USAGE = `Aufruf:
-  werkstatt run <Spec-ID> [Optionen]   Spec umsetzen
-  werkstatt status                     gesperrte Akzeptanztests anzeigen
-  werkstatt unlock <Pfad-Teil>...      Akzeptanztests entsperren (nur für Menschen)
+const USAGE = `Usage:
+  werkstatt run <spec-id> [options]    implement a spec
+  werkstatt status                     show locked acceptance tests
+  werkstatt unlock <path-part>...      unlock acceptance tests (humans only)
 
-\`run\` führt eine freigegebene Spec ohne Zutun durch: Akzeptanztests ableiten (falls
-noch keine da sind), implementieren, verify und Review – jeweils in eigenen
-Agent-Sessions. Committet nicht.
+\`run\` takes an approved spec all the way through on its own: derive acceptance tests
+(unless they exist), implement, verify and review – each in its own agent session.
+Never commits.
 
-Optionen für run:
-  --project <dir>       Projektverzeichnis (Standard: aktuelles Verzeichnis)
-  --attempts <n>        Implementierungsversuche (Standard: 2)
-  --budget <usd>        Kostenobergrenze je Session in USD
-  --max-turns <n>       Turn-Obergrenze je Session (Standard: 150)
-  --model <id>          Modell für alle Sessions
-  --allow-dirty         Auch mit uncommitteten Änderungen starten`;
+Options for run:
+  --project <dir>       project directory (default: current directory)
+  --attempts <n>        implementation attempts (default: 2)
+  --budget <usd>        cost limit per session in USD
+  --max-turns <n>       turn limit per session (default: 150)
+  --model <id>          model for all sessions
+  --allow-dirty         start even with uncommitted changes`;
 
 async function main() {
   const { positionals, values } = parseArgs({
@@ -58,28 +58,28 @@ async function main() {
 
   console.log(`\n=== Spec ${record.spec}: ${record.outcome.toUpperCase()} ===`);
   console.log(record.reason);
-  console.log(`\nKosten: $${record.costUsd.toFixed(2)}`);
+  console.log(`\nCost: $${record.costUsd.toFixed(2)}`);
   for (const phase of record.phases) {
-    const cost = phase.session ? ` ($${phase.session.costUsd.toFixed(2)}, ${phase.session.turns} Turns)` : "";
+    const cost = phase.session ? ` ($${phase.session.costUsd.toFixed(2)}, ${phase.session.turns} turns)` : "";
     console.log(`  ${phase.name}: ${phase.verdict}${cost}`);
   }
-  const decided = record.decisions.filter((d) => d.kind !== "später");
-  if (decided.length) console.log(`\n${decided.length} Entscheidung(en) in ${project.spec(record.spec).path} festgehalten.`);
+  const decided = record.decisions.filter((d) => d.kind !== "later");
+  if (decided.length) console.log(`\n${decided.length} decision(s) recorded in ${project.spec(record.spec).path}.`);
   if (record.openQuestions.length) {
-    console.log("\nOffene Fragen an dich:");
+    console.log("\nOpen questions for you:");
     record.openQuestions.forEach((q, i) => console.log(`  ${i + 1}. ${q}`));
   }
   if (record.changedFiles.length) {
-    console.log(`\nGeänderte Dateien:\n${record.changedFiles.join("\n")}`);
-    if (record.outcome === "freigegeben") console.log("\nNächster Schritt: Diff ansehen und committen.");
+    console.log(`\nChanged files:\n${record.changedFiles.join("\n")}`);
+    if (record.outcome === "done") console.log("\nNext step: review the diff and commit.");
   }
-  process.exit(record.outcome === "freigegeben" ? 0 : 1);
+  process.exit(record.outcome === "done" ? 0 : 1);
 }
 
 function positive(option: string, value: string, integer: boolean): number {
   const n = Number(value);
   if (!(n > 0) || (integer && !Number.isInteger(n))) {
-    console.error(`--${option} erwartet ${integer ? "eine ganze Zahl" : "eine Zahl"} größer 0, nicht "${value}".`);
+    console.error(`--${option} expects ${integer ? "a whole number" : "a number"} greater than 0, not "${value}".`);
     process.exit(2);
   }
   return n;
@@ -87,20 +87,20 @@ function positive(option: string, value: string, integer: boolean): number {
 
 async function askUser(questions: string[]): Promise<Decision[]> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  console.log(`\nDas Review ist bestanden, lässt aber ${questions.length} Frage(n) offen, die die Spec nicht regelt.`);
+  console.log(`\nThe review passed but leaves ${questions.length} question(s) open that the spec doesn't settle.`);
   const decisions: Decision[] = [];
   for (const [i, question] of questions.entries()) {
-    console.log(`\nFrage ${i + 1}/${questions.length}: ${question}`);
+    console.log(`\nQuestion ${i + 1}/${questions.length}: ${question}`);
     let choice = "";
-    while (!["a", "e", "s"].includes(choice)) {
-      choice = (await rl.question("  [a] so lassen, wie umgesetzt   [e] anders entscheiden   [s] später > ")).trim().toLowerCase();
+    while (!["k", "c", "l"].includes(choice)) {
+      choice = (await rl.question("  [k] keep as implemented   [c] decide differently   [l] later > ")).trim().toLowerCase();
     }
-    if (choice === "a") decisions.push({ question, kind: "bestätigt" });
-    if (choice === "s") decisions.push({ question, kind: "später" });
-    if (choice === "e") {
+    if (choice === "k") decisions.push({ question, kind: "confirmed" });
+    if (choice === "l") decisions.push({ question, kind: "later" });
+    if (choice === "c") {
       let text = "";
-      while (!text) text = (await rl.question("  Deine Entscheidung: ")).trim();
-      decisions.push({ question, kind: "geändert", text });
+      while (!text) text = (await rl.question("  Your decision: ")).trim();
+      decisions.push({ question, kind: "changed", text });
     }
   }
   rl.close();

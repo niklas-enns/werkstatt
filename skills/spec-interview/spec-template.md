@@ -1,49 +1,49 @@
 ---
 id: NNN
-titel: <Kurzer Titel>
-status: entwurf   # entwurf | freigegeben
-abhaengig-von: [] # IDs anderer Specs
+title: <short title>
+status: draft     # draft | approved
+depends-on: []    # IDs of other specs
 ---
 
-# NNN – <Kurzer Titel>
+# NNN – <short title>
 
-## Ziel
+## Goal
 
-<Ein bis drei Sätze: welches Problem, für wen, warum jetzt.>
+<One to three sentences: which problem, for whom, why now.>
 
-## Begriffe
+## Terms
 
-- **<Begriff>**: <Bedeutung in diesem Projekt>
+- **<term>**: <meaning in this project>
 
-## Regeln
+## Rules
 
-1. <Fachliche Regel, eindeutig formuliert>
+1. <business rule, phrased unambiguously>
 
-## Schnittstelle
+## Interface
 
-<Wie das Verhalten von außen aufgerufen und beobachtet wird – so konkret, dass
-Akzeptanztests dagegen geschrieben werden können. Z. B. für HTTP:>
+<How the behaviour is triggered and observed from the outside – concrete enough to write
+acceptance tests against. E.g. for HTTP:>
 
-| Aufruf | Eingabe | Antwort |
-|--------|---------|---------|
+| Call | Input | Response |
+|------|-------|----------|
 | `POST /…` | `{ … }` | `201`, `{ … }` |
 
-<Fehlerantworten: Statuscode und was der Aufrufer erfährt.>
+<Error responses: status code and what the caller learns.>
 
-## Akzeptanzkriterien
+## Acceptance criteria
 
-### AK-1: <Kurzname>
-- **Gegeben** <Ausgangszustand mit konkreten Werten>
-- **Wenn** <Aktion>
-- **Dann** <beobachtbares Ergebnis>
+### AC-1: <short name>
+- **Given** <starting state with concrete values>
+- **When** <action>
+- **Then** <observable result>
 
-## Abgrenzung
+## Out of scope
 
-- <Was ausdrücklich nicht Teil dieser Spec ist>
+- <what is explicitly not part of this spec>
 
-## Offene Fragen
+## Open questions
 
-- <Was der Nutzer noch entscheiden muss; leer, wenn nichts offen ist>
+- <what the user still has to decide; empty if nothing is open>
 
-<!-- Der Abschnitt "## Entscheidungen" wird von `werkstatt run` angehängt, wenn der
-     Nutzer offene Fragen aus dem Review beantwortet. Nicht von Hand anlegen. -->
+<!-- The "## Decisions" section is appended by `werkstatt run` when the user answers
+     open questions from the review. Don't create it by hand. -->

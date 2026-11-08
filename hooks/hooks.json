@@ -1,5 +1,5 @@
 {
-  "description": "werkstatt: Akzeptanztests schützen; im Orchestrator verify vor dem Abschluss erzwingen",
+  "description": "werkstatt: protect acceptance tests; in the orchestrator, require green verify before finishing",
   "hooks": {
     "PreToolUse": [
       {

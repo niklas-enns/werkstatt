@@ -1,35 +1,35 @@
-# AGENTS.md – <Projektname>
+# AGENTS.md – <project name>
 
-Dieses Dokument richtet sich an Coding-Agents. Es beschreibt, was das Projekt ist,
-wie man es baut und prüft und welche Regeln gelten.
+This document is for coding agents. It describes what the project is, how to build and
+check it, and which rules apply.
 
-## Worum geht es?
+## What is it about?
 
-<Zwei bis vier Sätze: Was das System tut und für wen.>
+<Two to four sentences: what the system does and for whom.>
 
-Fachliche Anforderungen stehen **ausschließlich** in `<specs-Ordner>/`. Was dort nicht
-steht, ist nicht beauftragt. Bei Unklarheiten: nachfragen statt raten.
+Business requirements live **exclusively** in `<spec directory>/`. Whatever isn't there
+hasn't been requested. When in doubt: ask instead of guessing.
 
-## Bauen und prüfen
+## Build and check
 
-| Zweck                   | Befehl              |
-|-------------------------|---------------------|
-| Bauen und alle Tests    | `<Prüfbefehl>`      |
-| Anwendung starten       | `<Startbefehl>`     |
-| <weitere, falls nützlich> | `<…>`             |
+| Purpose                  | Command             |
+|--------------------------|---------------------|
+| Build and run all tests  | `<verify command>`  |
+| Start the application    | `<run command>`     |
+| <more, if useful>        | `<…>`               |
 
-Eine Aufgabe ist erst erledigt, wenn `<Prüfbefehl>` grün ist.
+A task is only done when `<verify command>` is green.
 
-## Struktur
+## Structure
 
-- `<specs-Ordner>/` – Specs, eine Datei pro Feature. Nur Menschen geben Specs frei.
-- `<Akzeptanztest-Ordner>/` – Akzeptanztests, aus Specs abgeleitet.
-  **Nicht verändern**, um sie grün zu bekommen. Wenn ein Akzeptanztest falsch
-  erscheint: stoppen und melden.
-- `<Produktionscode>/` – Produktionscode.
-- <weitere wichtige Orte>
+- `<spec directory>/` – specs, one file per feature. Only humans approve specs.
+- `<acceptance test directory>/` – acceptance tests, derived from specs.
+  **Don't change them** to make them pass. If an acceptance test seems wrong: stop and
+  report it.
+- `<production code>/` – production code.
+- <other important places>
 
-## Konventionen
+## Conventions
 
-- <Sprache, Framework-Version, zentrale Bibliotheken>
-- <Belegbare Regeln aus Linter, CI, bestehender Doku oder vom Nutzer genannt>
+- <language, framework version, central libraries>
+- <rules backed up by linter, CI, existing docs, or named by the user>

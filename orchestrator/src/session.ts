@@ -95,7 +95,7 @@ export async function runSession(
       };
     }
   }
-  log(label, `Ende: ${result.outcome}, ${result.turns} Turns, $${result.costUsd.toFixed(2)}`);
+  log(label, `End: ${result.outcome}, ${result.turns} turns, $${result.costUsd.toFixed(2)}`);
   return result;
 }
 
