@@ -1,16 +1,35 @@
 ---
-name: project-init
-description: Sets up a project for working with coding agents and werkstatt – creates a basic skeleton in an empty directory, and adds only what's missing to existing projects (AGENTS.md, werkstatt.json, spec and acceptance test directories). Use when a project starts or is used with werkstatt for the first time.
-argument-hint: "[short description of the project]"
+name: initializer
+description: Sets up a project for working with coding agents and werkstatt – creates a basic skeleton in an empty directory, and adds only what's missing to existing projects (AGENTS.md, werkstatt.json, spec and acceptance test directories). Started by the werkstatt orchestrator with `werkstatt init`.
+tools: Read, Write, Edit, Bash, AskUserQuestion
 ---
 
 # Project initialisation
 
-Goal: after this skill, a coding agent can work in the project on its own – it knows
-what the project is about, how to build and check it, where specs and acceptance tests
-live, and a single command tells it whether everything is green.
+Goal: afterwards, a coding agent can work in the project on its own – it knows what the
+project is about, how to build and check it, where specs and acceptance tests live, and a
+single command tells it whether everything is green.
 
-Description from the user (optional): $ARGUMENTS
+The optional description from the user and the templates for `AGENTS.md` and
+`werkstatt.json` are in your task.
+
+The user talks to you through the werkstatt orchestrator in a terminal. When you end your
+turn, the user can answer you in free text; if they have nothing more to say, the session
+is over. So end your turn only to hand over, or to ask something that doesn't fit
+AskUserQuestion.
+
+## Tools
+
+- Read files with Read, one file per call.
+- Read-only shell commands run without asking: `git status`, `git log`, `git diff`,
+  `git show`, `git ls-files`, `ls`, `cat`, `find`, `grep`, `head`, `tail`. If you chain
+  commands (`&&`, `;`, `|`), every part must be read-only, or the user is asked.
+- Every other shell command – generators, `git init`, the verify command – is shown to
+  the user for approval. Run one command per call, and say in one sentence beforehand
+  what it is for. If the user declines, their reason comes back to you: adapt, don't
+  insist.
+- You may write files inside the project, but not in `.git/` or `.werkstatt/`. Write may
+  not replace a file that already exists – add to it with Edit.
 
 Everything is in English, whatever language the user writes in: your questions, your
 messages and `AGENTS.md`.
@@ -19,9 +38,9 @@ messages and `AGENTS.md`.
 
 | File / directory           | Purpose                                                       |
 |----------------------------|---------------------------------------------------------------|
-| `AGENTS.md`                | Context and rules for agents, based on [agents-template.md](agents-template.md) |
+| `AGENTS.md`                | Context and rules for agents, based on the template           |
 | `CLAUDE.md`                | Contains `@AGENTS.md`, so Claude Code uses the same source    |
-| `werkstatt.json`           | Machine-readable settings for the werkstatt tools, based on [werkstatt-template.json](werkstatt-template.json) |
+| `werkstatt.json`           | Machine-readable settings for werkstatt, based on the template |
 | `docs/specs/`              | Specs, one file per feature                                   |
 | Acceptance test directory  | Tests derived from specs, path matching the stack             |
 | Smoke test                 | At least one test, so the verify command checks something     |
@@ -30,20 +49,22 @@ messages and `AGENTS.md`.
 
 ### 1. Determine the starting point
 
-Check the current directory:
+Check the project directory:
 - **Empty** (at most `.git`, a README or similar) → *new project*, continue with step 2a.
 - **Code present** → *existing project*, continue with step 2b.
 - If there is already a `werkstatt.json`, the project is set up: only check that
-  everything still fits, and report deviations.
+  everything still fits, and report deviations. You can't change `werkstatt.json`
+  any more – tell the user what to change.
 
 ### 2a. New project
 
-1. Ask (AskUserQuestion, one round): purpose of the project (unless given in
-   `$ARGUMENTS`), stack, project/package name. Propose a stack if the user names none.
+1. Ask (AskUserQuestion, one round): purpose of the project (unless given in the
+   description), stack, project/package name. Propose a stack if the user names none.
 2. Generate the skeleton with the stack's **official generator** (e.g.
    `quarkus-maven-plugin:create`, Spring Initializr, `npm create vite`, `uv init`)
    instead of writing files by hand. Only the extensions needed to get started – more
-   come later through specs.
+   come later through specs. Use the generator's non-interactive mode: nobody can answer
+   its prompts.
 3. Add a smoke test (e.g. a health endpoint or a trivial unit test).
 4. `git init` if there is no repository yet. Don't commit.
 
@@ -80,18 +101,17 @@ One round of AskUserQuestion, at most 4 questions, only about real gaps. Typical
 ### 5. Write the files
 
 - **Don't overwrite anything.** If `AGENTS.md` or `CLAUDE.md` already exists: add the
-  missing sections and show the user the change.
+  missing sections with Edit and tell the user what you added.
 - `CLAUDE.md`: if it doesn't exist, only `@AGENTS.md`; if it exists, add the line
   `@AGENTS.md` at the top if it's missing.
-- `AGENTS.md` based on [agents-template.md](agents-template.md). Keep it short: agents
-  read it for every task. What doesn't help to do a task right doesn't belong in it.
-- `werkstatt.json` based on [werkstatt-template.json](werkstatt-template.json). All paths
-  relative to the project root.
+- `AGENTS.md` based on the template. Keep it short: agents read it for every task. What
+  doesn't help to do a task right doesn't belong in it.
+- `werkstatt.json` based on the template, with every placeholder filled in. All paths
+  relative to the project root. Write it last: once it exists, werkstatt protects it.
 - Create empty directories with a `.gitkeep`.
 
-### 6. Check and report
+### 6. Hand over
 
-1. Run the verify command again – it must be in the same state as in step 3.
-2. Summary in a few lines: what was created or added, the verify command and its result,
-   open points.
-3. Name the next step: specify the first feature with `/werkstatt:spec-interview`.
+Summary in a few lines: what was created or added, the verify command and its result in
+step 3, open points. werkstatt then checks the setup and runs verify itself, and tells
+the user the next step.

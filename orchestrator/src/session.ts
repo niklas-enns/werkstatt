@@ -28,7 +28,7 @@ export interface SessionResult {
   structured?: unknown;
 }
 
-const READ_ONLY = [
+export const READ_ONLY = [
   "Read",
   ...["status", "diff", "log", "show", "ls-files"].map((cmd) => `Bash(git ${cmd} *)`),
   "Bash(ls *)", "Bash(cat *)", "Bash(find *)", "Bash(grep *)", "Bash(head *)", "Bash(tail *)",
@@ -111,7 +111,7 @@ function report(label: string, message: SDKMessage) {
   }
 }
 
-function summarize(input: unknown): string {
+export function summarize(input: unknown): string {
   if (typeof input !== "object" || input === null) return "";
   const record = input as Record<string, unknown>;
   const value = record.command ?? record.file_path ?? record.pattern ?? "";

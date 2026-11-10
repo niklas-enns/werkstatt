@@ -1,25 +1,32 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
-import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
+import { init } from "./init.js";
+import { interview } from "./interview.js";
 import { HOOK_SCRIPT, Project } from "./project.js";
 import { run, type Decision } from "./run.js";
+import type { SessionOptions } from "./session.js";
+import { closeTerminal, prompt } from "./terminal.js";
 
 const USAGE = `Usage:
-  werkstatt run <spec-id> [options]    implement a spec
-  werkstatt status                     show locked acceptance tests
-  werkstatt unlock <path-part>...      unlock acceptance tests (humans only)
+  werkstatt init [description] [options]  set up the project, asking you where needed
+  werkstatt spec <idea> [options]         write a spec by interviewing you
+  werkstatt run <spec-id> [options]       implement a spec
+  werkstatt status                        show locked acceptance tests
+  werkstatt unlock <path-part>...         unlock acceptance tests (humans only)
 
 \`run\` takes an approved spec all the way through on its own: derive acceptance tests
 (unless they exist), implement, verify and review – each in its own agent session.
 Never commits.
 
-Options for run:
+Options:
   --project <dir>       project directory (default: current directory)
-  --attempts <n>        implementation attempts (default: 2)
   --budget <usd>        cost limit per session in USD
   --max-turns <n>       turn limit per session (default: 150)
   --model <id>          model for all sessions
+
+Options for run:
+  --attempts <n>        implementation attempts (default: 2)
   --allow-dirty         start even with uncommitted changes`;
 
 async function main() {
@@ -35,26 +42,32 @@ async function main() {
       help: { type: "boolean", short: "h", default: false },
     },
   });
-  const [command, specId] = positionals;
+  const [command, argument] = positionals;
   if (command === "status" || command === "unlock") {
     execFileSync("python3", [HOOK_SCRIPT, ...positionals], { cwd: values.project, stdio: "inherit" });
     return;
   }
-  if (values.help || command !== "run" || !specId) {
+  if (values.help || !["init", "spec", "run"].includes(command) || (command !== "init" && !argument)) {
     console.log(USAGE);
     process.exit(values.help ? 0 : 2);
   }
 
-  const options = {
-    maxAttempts: positive("attempts", values.attempts, true),
+  const session = {
     maxBudgetUsd: values.budget === undefined ? undefined : positive("budget", values.budget, false),
     maxTurns: positive("max-turns", values["max-turns"], true),
     model: values.model,
+  };
+  if (command === "init") return setUp(values.project, positionals.slice(1).join(" "), session);
+  const project = Project.load(values.project);
+  if (command === "spec") return spec(project, positionals.slice(1).join(" "), session);
+
+  const options = {
+    ...session,
+    maxAttempts: positive("attempts", values.attempts, true),
     allowDirty: values["allow-dirty"],
     decide: process.stdin.isTTY ? askUser : undefined,
   };
-  const project = Project.load(values.project);
-  const record = await run(project, specId, options);
+  const record = await run(project, argument, options);
 
   console.log(`\n=== Spec ${record.spec}: ${record.outcome.toUpperCase()} ===`);
   console.log(record.reason);
@@ -76,6 +89,56 @@ async function main() {
   process.exit(record.outcome === "done" ? 0 : 1);
 }
 
+async function setUp(root: string, description: string, options: SessionOptions) {
+  requireTerminal("init");
+  const result = await init(root, description, options);
+  closeTerminal();
+
+  console.log(`\nCost: $${result.costUsd.toFixed(2)}`);
+  if (result.outcome !== "success") console.log(`The session ended with ${result.outcome}.`);
+  if (result.problems.length) {
+    console.log(`\nThe setup is not complete:\n${result.problems.map((p) => `  - ${p}`).join("\n")}`);
+    console.log("\nRun werkstatt init again, or fix it by hand.");
+    process.exit(1);
+  }
+  if (result.verify) {
+    console.log(`\nverify is ${result.verify.ok ? "green" : "RED"}.`);
+    if (!result.verify.ok) console.log(result.verify.output.split("\n").slice(-20).join("\n"));
+  }
+  console.log(`
+Next steps:
+  1. Review the changes and commit.
+  2. werkstatt spec "<your first feature>"`);
+  process.exit(result.outcome === "success" && result.verify?.ok ? 0 : 1);
+}
+
+async function spec(project: Project, idea: string, options: SessionOptions) {
+  requireTerminal("spec");
+  const result = await interview(project, idea, options);
+  closeTerminal();
+
+  console.log(`\nCost: $${result.costUsd.toFixed(2)}`);
+  if (result.outcome !== "success") console.log(`The interview ended with ${result.outcome}.`);
+  if (!result.specs.length) {
+    console.log("No spec written.");
+    process.exit(1);
+  }
+  console.log(`\nSpec: ${result.specs.join(", ")}`);
+  console.log(`
+Next steps:
+  1. Review the spec and set \`status: approved\` in its front matter.
+  2. Commit.
+  3. werkstatt run <number>`);
+  process.exit(result.outcome === "success" ? 0 : 1);
+}
+
+function requireTerminal(command: string) {
+  if (!process.stdin.isTTY) {
+    console.error(`werkstatt ${command} talks with you – it needs a terminal to ask you questions.`);
+    process.exit(2);
+  }
+}
+
 function positive(option: string, value: string, integer: boolean): number {
   const n = Number(value);
   if (!(n > 0) || (integer && !Number.isInteger(n))) {
@@ -86,24 +149,23 @@ function positive(option: string, value: string, integer: boolean): number {
 }
 
 async function askUser(questions: string[]): Promise<Decision[]> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
   console.log(`\nThe review passed but leaves ${questions.length} question(s) open that the spec doesn't settle.`);
   const decisions: Decision[] = [];
   for (const [i, question] of questions.entries()) {
     console.log(`\nQuestion ${i + 1}/${questions.length}: ${question}`);
     let choice = "";
     while (!["k", "c", "l"].includes(choice)) {
-      choice = (await rl.question("  [k] keep as implemented   [c] decide differently   [l] later > ")).trim().toLowerCase();
+      choice = (await prompt("  [k] keep as implemented   [c] decide differently   [l] later > ")).toLowerCase();
     }
     if (choice === "k") decisions.push({ question, kind: "confirmed" });
     if (choice === "l") decisions.push({ question, kind: "later" });
     if (choice === "c") {
       let text = "";
-      while (!text) text = (await rl.question("  Your decision: ")).trim();
+      while (!text) text = await prompt("  Your decision: ");
       decisions.push({ question, kind: "changed", text });
     }
   }
-  rl.close();
+  closeTerminal();
   return decisions;
 }
 

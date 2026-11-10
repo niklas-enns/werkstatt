@@ -31,7 +31,7 @@ werkstatt is the harness around the agent that closes these gaps: spec first, te
 
 ```mermaid
 flowchart LR
-    idea([Idea]) --> interview["/werkstatt:spec-interview"]
+    idea([Idea]) --> interview["werkstatt spec"]
     interview --> spec[Spec with<br/>acceptance criteria]
     spec --> release{{You approve}}
     release --> run["werkstatt run"]
@@ -50,7 +50,7 @@ flowchart LR
     review -- passed --> done([Review the diff<br/>and commit])
 ```
 
-1. **Specify** – In an interview, an agent asks you about rules, edge cases, error cases and the interface until every acceptance criterion is unambiguously testable.
+1. **Specify** – `werkstatt spec` interviews you in the terminal: the **interviewer** asks about rules, edge cases, error cases and the interface until every acceptance criterion is unambiguously testable. It may only write Markdown in the spec directory – and never approve.
 2. **Approve** – Only you set a spec to `approved`.
 3. **Let it be implemented** – `werkstatt run` does the rest on its own:
    - The **test-writer** turns each acceptance criterion into an executable test. The tests are **locked**.
@@ -64,26 +64,17 @@ Everything werkstatt and its agents produce is in English – the interview, spe
 
 | Component | Kind | Job |
 |---|---|---|
-| `project-init` | Skill | Sets up a project: `AGENTS.md`, `werkstatt.json`, directories for specs and acceptance tests – in an empty directory also the project skeleton |
-| `spec-interview` | Skill | Turns a rough idea into a testable spec by interviewing you |
+| `initializer` | Agent | Sets up a project: `AGENTS.md`, `werkstatt.json`, directories for specs and acceptance tests – in an empty directory also the project skeleton |
+| `interviewer` | Agent | Turns a rough idea into a testable spec by interviewing you |
 | `test-writer` | Agent | Derives black-box acceptance tests from the spec, one per criterion |
 | `implementer` | Agent | Implements the spec until the locked tests are green |
 | `reviewer` | Agent | Checks the implementation against the spec and `AGENTS.md`, with a structured verdict |
 | Hooks | Hooks | Lock acceptance tests against changes, require a green `verify` from the implementer |
-| `werkstatt run` | Orchestrator (TypeScript, [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk)) | Drives the phases, checks for itself, retries, asks, keeps a log |
+| `werkstatt` | Orchestrator (TypeScript, [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk)) | The one entry point: `init` and `spec` talk with you in the terminal, `run` drives the phases, checks for itself, retries, asks, keeps a log |
 
 ## Quick start
 
-### 1. Install the plugin
-
-In Claude Code:
-
-```
-/plugin marketplace add niklas-enns/werkstatt
-/plugin install werkstatt@werkstatt
-```
-
-### 2. Install the orchestrator
+### 1. Install werkstatt
 
 ```bash
 git clone https://github.com/niklas-enns/werkstatt.git
@@ -91,24 +82,47 @@ cd werkstatt/orchestrator
 npm install && npm run build && npm link
 ```
 
-The `werkstatt` command is then available everywhere. The orchestrator uses your Claude Code login or `ANTHROPIC_API_KEY` and loads the agents and hooks from its own checkout.
+The `werkstatt` command is then available everywhere. It uses your Claude Code login or `ANTHROPIC_API_KEY` and loads the agents and hooks from its own checkout.
 
-### 3. Get going
+### 2. Get going
 
-In the target project, in Claude Code:
+Everything happens in a terminal, in the target project:
 
+```bash
+werkstatt init
+werkstatt spec "A person creates a poll to find a date, with several proposed dates"
 ```
-/werkstatt:project-init
-/werkstatt:spec-interview A person creates a poll to find a date, with several proposed dates
-```
 
-Read the spec, set `status: approved` in its front matter, commit. Then, in a terminal:
+`init` and `spec` talk with you: answer a question with an option's number or in your own words, and when the agent hands over, reply to ask for changes or press Enter to finish. `init` shows you every shell command that changes something (generators, `git init`, the verify command) before it runs.
+
+Read the spec, set `status: approved` in its front matter, commit. Then:
 
 ```bash
 werkstatt run 001
 ```
 
+### 3. Optional: protect the tests in Claude Code too
+
+`werkstatt run` brings its own hooks. To have the acceptance tests locked while you work with Claude Code yourself, install the plugin there:
+
+```
+/plugin marketplace add niklas-enns/werkstatt
+/plugin install werkstatt@werkstatt
+```
+
 ## The orchestrator in detail
+
+```
+werkstatt init [description] [--budget <usd>] [--max-turns 150] [--model <id>]
+```
+
+The initializer finds out stack, verify command and structure, asks about what it can't find out, and writes `AGENTS.md`, `CLAUDE.md`, `werkstatt.json` and the directories – in an empty directory it first generates a skeleton with the stack's official generator. It may write inside the project but never replace an existing file; read-only shell commands run directly, every other one needs your approval (`y`, `a` for always, `n` or a reason). Afterwards werkstatt checks the setup itself and runs `verify`.
+
+```
+werkstatt spec <idea> [--budget <usd>] [--max-turns 150] [--model <id>]
+```
+
+The interview is one agent session that you take turns with. werkstatt shows the interviewer's questions in the terminal and decides its tool calls itself: reading is allowed, writing only to Markdown files in the spec directory, and a write that sets `status: approved` is denied. At the end it lists the specs that were written or changed.
 
 ```
 werkstatt run <spec-id> [--attempts 2] [--budget <usd>] [--max-turns 150] [--model <id>] [--allow-dirty]
@@ -129,11 +143,11 @@ The agent sessions run without asking: file tools, the verify command and read-o
 
 ## The spec format
 
-A spec is a Markdown file `docs/specs/NNN-<slug>.md` with front matter (`id`, `title`, `status: draft | approved`, `depends-on`) and the sections Goal, Terms, Rules, Interface, Acceptance criteria, Out of scope and Open questions. Each acceptance criterion has an ID (`AC-1`, …) and the form **Given** / **When** / **Then** with concrete values. The template is [`skills/spec-interview/spec-template.md`](skills/spec-interview/spec-template.md).
+A spec is a Markdown file `docs/specs/NNN-<slug>.md` with front matter (`id`, `title`, `status: draft | approved`, `depends-on`) and the sections Goal, Terms, Rules, Interface, Acceptance criteria, Out of scope and Open questions. Each acceptance criterion has an ID (`AC-1`, …) and the form **Given** / **When** / **Then** with concrete values. The template is [`templates/spec-template.md`](templates/spec-template.md).
 
 ## Protecting the acceptance tests
 
-The hooks are active as soon as the plugin is loaded and the project has a `werkstatt.json` – also when you work with Claude Code interactively.
+The hooks are active in every werkstatt session as soon as the project has a `werkstatt.json` – and, with the plugin installed, also when you work with Claude Code interactively.
 
 | Hook | Effect |
 |---|---|
@@ -157,7 +171,7 @@ Good to know:
 
 ## Configuration
 
-`project-init` creates a `werkstatt.json` in the project:
+`werkstatt init` creates a `werkstatt.json` in the project:
 
 ```json
 {
@@ -192,8 +206,8 @@ Context and conventions for the agents live in the project's `AGENTS.md`.
 ```
 werkstatt/
 ├── .claude-plugin/     plugin and marketplace manifest
-├── skills/             project-init, spec-interview
-├── agents/             test-writer, implementer, reviewer
+├── agents/             initializer, interviewer, test-writer, implementer, reviewer
+├── templates/          templates for spec, AGENTS.md and werkstatt.json
 ├── hooks/              acceptance test lock, verify gate
 ├── orchestrator/       werkstatt run (TypeScript, Claude Agent SDK)
 └── tests/              tests for the hooks

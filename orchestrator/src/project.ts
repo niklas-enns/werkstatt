@@ -32,7 +32,7 @@ export class Project {
   static load(root: string): Project {
     const file = join(root, "werkstatt.json");
     if (!existsSync(file)) {
-      throw new Error(`No werkstatt.json in ${root} – run /werkstatt:project-init first.`);
+      throw new Error(`No werkstatt.json in ${root} – run "werkstatt init" first.`);
     }
     return new Project(root, JSON.parse(readFileSync(file, "utf8")));
   }
