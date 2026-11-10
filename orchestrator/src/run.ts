@@ -129,6 +129,14 @@ export async function run(project: Project, specId: string, options: RunOptions)
     return finish("aborted", "Uncommitted changes – commit first so the changes of this run are clear " +
       `(or use --allow-dirty):\n${dirty.join("\n")}`);
   }
+  // Locked tests changed outside a werkstatt session would otherwise become the new baseline.
+  const { tampered } = project.locks();
+  if (tampered.length) {
+    return finish("aborted", "Locked acceptance tests were changed since they were locked:\n" +
+      tampered.map((path) => `  ${path}`).join("\n") +
+      "\nTo keep the change: werkstatt unlock <path> (it is locked again with its new content). " +
+      "To undo it: git checkout -- <path>.");
+  }
   const base = project.head();
   log("run", `Spec ${spec.id} – ${spec.title}`);
 
@@ -158,13 +166,13 @@ export async function run(project: Project, specId: string, options: RunOptions)
     phase.note = `${tests.length} test file(s)` + (unlocked.length ? `, NOT locked: ${unlocked.join(", ")}` : ", locked.");
     if (unlocked.length) {
       phase.verdict = "failed";
-      return finish("failed", `Acceptance tests were not locked – is the plugin running with its hooks?\n${unlocked.join("\n")}`);
+      return finish("failed", `Acceptance tests were not locked – did the test-writer session end without its Stop hook?\n${unlocked.join("\n")}`);
     }
   }
 
   // Our own copy: the lock manifest lives in the project, where an agent could delete it.
   const tests = project.snapshot(project.acceptanceTests(spec));
-  const before = project.verify();
+  const before = await project.verify();
   if (before.ok) log("run", "verify is already green – the tests may check too little, or the spec is already implemented.");
 
   // Phase 2+3: implement, check, review – retried with the findings as feedback.
@@ -179,7 +187,7 @@ export async function run(project: Project, specId: string, options: RunOptions)
 
     const tampered = project.restore(tests);
     if (tampered.length) project.lock();
-    const verify = project.verify();
+    const verify = await project.verify();
     const problems = [
       tampered.length && `Locked acceptance tests were changed or deleted (restored): ${tampered.join(", ")}`,
       !verify.ok && `verify is red:\n${verify.output}`,

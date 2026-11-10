@@ -1,6 +1,7 @@
 import { query, type CanUseTool, type Options } from "@anthropic-ai/claude-agent-sdk";
 import { isAbsolute, relative, resolve } from "node:path";
-import { PLUGIN_ROOT } from "./project.js";
+import { loadAgents } from "./agents.js";
+import { guard } from "./guard.js";
 import { READ_ONLY, summarize, type SessionOptions } from "./session.js";
 import { prompt } from "./terminal.js";
 
@@ -30,7 +31,8 @@ export async function converse(
     const sdkOptions: Options = {
       cwd: root,
       agent,
-      plugins: [{ type: "local", path: PLUGIN_ROOT }],
+      agents: loadAgents(),
+      hooks: guard(root, { stop: false }, (text) => console.log(`  ! ${text}`)),
       settingSources: ["project", "local"],
       permissionMode: "default",
       allowedTools: READ_ONLY.filter((tool) => tool !== "Read"),

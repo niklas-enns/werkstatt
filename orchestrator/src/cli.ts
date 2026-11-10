@@ -1,9 +1,8 @@
 #!/usr/bin/env node
-import { execFileSync } from "node:child_process";
 import { parseArgs } from "node:util";
 import { init } from "./init.js";
 import { interview } from "./interview.js";
-import { HOOK_SCRIPT, Project } from "./project.js";
+import { Project } from "./project.js";
 import { run, type Decision } from "./run.js";
 import type { SessionOptions } from "./session.js";
 import { closeTerminal, prompt } from "./terminal.js";
@@ -43,10 +42,8 @@ async function main() {
     },
   });
   const [command, argument] = positionals;
-  if (command === "status" || command === "unlock") {
-    execFileSync("python3", [HOOK_SCRIPT, ...positionals], { cwd: values.project, stdio: "inherit" });
-    return;
-  }
+  if (command === "status") return status(Project.load(values.project));
+  if (command === "unlock") return unlock(Project.load(values.project), positionals.slice(1));
   if (values.help || !["init", "spec", "run"].includes(command) || (command !== "init" && !argument)) {
     console.log(USAGE);
     process.exit(values.help ? 0 : 2);
@@ -130,6 +127,23 @@ Next steps:
   2. Commit.
   3. werkstatt run <number>`);
   process.exit(result.outcome === "success" ? 0 : 1);
+}
+
+function status(project: Project) {
+  const { locked, tampered } = project.locks();
+  console.log(`Project: ${project.root}`);
+  console.log(locked.length ? "Locked acceptance tests:" : "No locked acceptance tests.");
+  for (const path of locked) console.log(`  ${path}${tampered.includes(path) ? "  (CHANGED)" : ""}`);
+}
+
+function unlock(project: Project, parts: string[]) {
+  if (!parts.length) {
+    console.error("Usage: werkstatt unlock <path or part of a name>...");
+    process.exit(2);
+  }
+  const unlocked = project.unlock(...parts);
+  for (const path of unlocked) console.log(`unlocked: ${path}`);
+  if (!unlocked.length) console.log("Nothing found.");
 }
 
 function requireTerminal(command: string) {

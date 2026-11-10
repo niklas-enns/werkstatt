@@ -2,7 +2,7 @@ import type { CanUseTool } from "@anthropic-ai/claude-agent-sdk";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { converse, inside, targetPath, type ConversationResult } from "./conversation.js";
-import { PLUGIN_ROOT, Project } from "./project.js";
+import { PACKAGE_ROOT, Project } from "./project.js";
 import type { SessionOptions } from "./session.js";
 import { askQuestions, prompt, type Question } from "./terminal.js";
 
@@ -21,7 +21,7 @@ export interface Approval {
   reason?: string;
 }
 
-const TEMPLATES = join(PLUGIN_ROOT, "templates");
+const TEMPLATES = join(PACKAGE_ROOT, "templates");
 
 /**
  * Sets up a project in the terminal. The agent may write inside the project but never
@@ -29,9 +29,9 @@ const TEMPLATES = join(PLUGIN_ROOT, "templates");
  * Afterwards the orchestrator checks the setup itself and runs verify.
  */
 export async function init(root: string, description: string, options: SessionOptions): Promise<InitResult> {
-  const result = await converse(root, "werkstatt:initializer", initPrompt(description), decide(root, approveInTerminal), options);
+  const result = await converse(root, "initializer", initPrompt(description), decide(root, approveInTerminal), options);
   const { project, problems } = checkSetup(root);
-  return { ...result, problems, verify: project?.verify() };
+  return { ...result, problems, verify: await project?.verify() };
 }
 
 function initPrompt(description: string): string {

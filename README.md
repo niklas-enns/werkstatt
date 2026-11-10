@@ -9,7 +9,7 @@ Locked acceptance tests and an independent review make sure that what comes out 
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.1.0-orange.svg)](https://github.com/niklas-enns/werkstatt/releases)
-[![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-Plugin-d97757.svg)](https://code.claude.com/docs/en/plugins)
+[![Claude Agent SDK](https://img.shields.io/badge/Claude-Agent%20SDK-d97757.svg)](https://code.claude.com/docs/en/agent-sdk)
 
 </div>
 
@@ -69,7 +69,7 @@ Everything werkstatt and its agents produce is in English – the interview, spe
 | `test-writer` | Agent | Derives black-box acceptance tests from the spec, one per criterion |
 | `implementer` | Agent | Implements the spec until the locked tests are green |
 | `reviewer` | Agent | Checks the implementation against the spec and `AGENTS.md`, with a structured verdict |
-| Hooks | Hooks | Lock acceptance tests against changes, require a green `verify` from the implementer |
+| Guard | Hooks in every session | Lock acceptance tests against changes, require a green `verify` from the implementer |
 | `werkstatt` | Orchestrator (TypeScript, [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk)) | The one entry point: `init` and `spec` talk with you in the terminal, `run` drives the phases, checks for itself, retries, asks, keeps a log |
 
 ## Quick start
@@ -82,7 +82,7 @@ cd werkstatt/orchestrator
 npm install && npm run build && npm link
 ```
 
-The `werkstatt` command is then available everywhere. It uses your Claude Code login or `ANTHROPIC_API_KEY` and loads the agents and hooks from its own checkout.
+The `werkstatt` command is then available everywhere. It uses your Claude Code login or `ANTHROPIC_API_KEY` and loads the agents from its own checkout.
 
 ### 2. Get going
 
@@ -99,15 +99,6 @@ Read the spec, set `status: approved` in its front matter, commit. Then:
 
 ```bash
 werkstatt run 001
-```
-
-### 3. Optional: protect the tests in Claude Code too
-
-`werkstatt run` brings its own hooks. To have the acceptance tests locked while you work with Claude Code yourself, install the plugin there:
-
-```
-/plugin marketplace add niklas-enns/werkstatt
-/plugin install werkstatt@werkstatt
 ```
 
 ## The orchestrator in detail
@@ -147,12 +138,14 @@ A spec is a Markdown file `docs/specs/NNN-<slug>.md` with front matter (`id`, `t
 
 ## Protecting the acceptance tests
 
-The hooks are active in every werkstatt session as soon as the project has a `werkstatt.json` – and, with the plugin installed, also when you work with Claude Code interactively.
+werkstatt registers its hooks in every agent session it starts, as soon as the project has a `werkstatt.json`:
 
-| Hook | Effect |
-|---|---|
-| `PreToolUse` | Denies writes to locked acceptance tests, `.werkstatt/` and `werkstatt.json` – including obvious detours through the shell (`rm`, `sed -i`, redirections …) |
-| `Stop` | Restores changed locked tests from the locked copy and locks new test files. In the implementation phase, `verify` must also be green – after three rejections the session may end anyway, since the orchestrator checks for itself |
+| Hook | Sessions | Effect |
+|---|---|---|
+| `PreToolUse` | all | Denies writes to locked acceptance tests, `.werkstatt/` and `werkstatt.json` – including obvious detours through the shell (`rm`, `sed -i`, redirections …) |
+| `Stop` | `run` | Restores changed locked tests from the locked copy and locks new test files. In the implementation phase, `verify` must also be green – after three rejections the session may end anyway, since the orchestrator checks for itself |
+
+Between sessions, `werkstatt run` checks before it starts: if a locked test was changed since it was locked, it stops and names the file.
 
 Only humans can unlock:
 
@@ -163,8 +156,8 @@ werkstatt unlock Spec001      # unlock tests whose path contains "Spec001"
 
 Good to know:
 
-- **Unlock first, then change.** If you change a locked test by hand, the next stop hook silently restores it – even if you made the change in your editor.
-- **Unlocking is temporary.** After `unlock`, the next stop hook locks the test again with its then-current content. That's how you fix a wrong test: unlock, change, carry on.
+- **Unlock first, then change.** If you change a locked test by hand, the next `werkstatt run` refuses to start until you unlock it or undo the change.
+- **Unlocking is temporary.** After `unlock`, the next `werkstatt run` locks the test again with its then-current content. That's how you fix a wrong test: unlock, change, carry on.
 - **To have tests derived again:** unlock *and* delete the files. As long as a spec has tests, `werkstatt run` skips the test-writer phase.
 
 `.werkstatt/locks/` belongs in the repository, so the locks apply to everyone. `.werkstatt/state/` ignores itself.
@@ -190,8 +183,8 @@ Context and conventions for the agents live in the project's `AGENTS.md`.
 ## Requirements and limits
 
 **Requirements**
-- [Claude Code](https://code.claude.com) with plugin support
-- Node.js ≥ 20 (orchestrator), Python ≥ 3.9 (hooks), git
+- A Claude login ([Claude Code](https://code.claude.com)) or `ANTHROPIC_API_KEY`
+- Node.js ≥ 20, git
 - In the target project: **one** command that builds and runs all tests
 
 **A good fit** for backend and service projects whose behaviour can be tested from the outside through an interface (HTTP, CLI, public API).
@@ -205,19 +198,15 @@ Context and conventions for the agents live in the project's `AGENTS.md`.
 
 ```
 werkstatt/
-├── .claude-plugin/     plugin and marketplace manifest
 ├── agents/             initializer, interviewer, test-writer, implementer, reviewer
 ├── templates/          templates for spec, AGENTS.md and werkstatt.json
-├── hooks/              acceptance test lock, verify gate
-├── orchestrator/       werkstatt run (TypeScript, Claude Agent SDK)
-└── tests/              tests for the hooks
+└── orchestrator/       the werkstatt command (TypeScript, Claude Agent SDK), incl. the guard hooks
 ```
 
 Run the tests:
 
 ```bash
-python3 -m unittest discover tests      # hooks
-cd orchestrator && npm test             # orchestrator
+cd orchestrator && npm test
 ```
 
 ## Status

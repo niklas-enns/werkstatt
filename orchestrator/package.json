@@ -1,7 +1,7 @@
 {
   "name": "werkstatt-orchestrator",
   "version": "0.1.0",
-  "description": "Takes an approved spec all the way through on its own: derive acceptance tests, implement, verify, review.",
+  "description": "Spec-driven development with coding agents: set up, specify, and implement specs behind locked acceptance tests and an independent review.",
   "type": "module",
   "bin": {
     "werkstatt": "dist/cli.js"

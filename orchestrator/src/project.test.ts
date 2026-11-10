@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { Project } from "./project.js";
-import { addDecisionsToSpec } from "./run.js";
+import { addDecisionsToSpec, run } from "./run.js";
 
 const TEST = "tests/acceptance/Spec001FooTest.java";
 let root: string;
@@ -54,12 +54,70 @@ test("restore brings back changed and deleted files from the snapshot", () => {
   assert.equal(read(TEST), "original");
 });
 
-test("lock and discard manage the hook's locks", () => {
+test("lock locks new acceptance tests once, without .gitkeep", () => {
+  write("tests/acceptance/.gitkeep", "");
   assert.deepEqual(project.lock(), [TEST]);
-  assert.deepEqual(project.locks().locked, [TEST]);
+  assert.deepEqual(project.lock(), []);
+  assert.deepEqual(project.locks(), { locked: [TEST], tampered: [] });
+});
+
+test("the lock format is a manifest of sha256 digests plus copies of the files", () => {
+  project.lock();
+  assert.deepEqual(JSON.parse(read(".werkstatt/locks/manifest.json")), {
+    [TEST]: "0682c5f2076f099c34cfdd15a9e063849ed437a49677e6fcc5b4198c76575be5",
+  });
+  assert.equal(read(`.werkstatt/locks/files/${TEST}`), "original");
+});
+
+test("changed and deleted locked tests are tampered, and restored from the locked copy", () => {
+  project.lock();
+  write(TEST, "changed");
+  assert.deepEqual(project.locks().tampered, [TEST]);
+  assert.deepEqual(project.restoreTampered(), [TEST]);
+  assert.equal(read(TEST), "original");
+  rmSync(join(root, TEST));
+  assert.deepEqual(project.restoreTampered(), [TEST]);
+  assert.equal(read(TEST), "original");
+  assert.deepEqual(project.restoreTampered(), []);
+});
+
+test("unlock by part of the path, then lock again with the current content", () => {
+  project.lock();
+  assert.deepEqual(project.unlock("Spec001"), [TEST]);
+  assert.deepEqual(project.unlock("Spec001"), []);
+  write(TEST, "fixed by hand");
+  assert.deepEqual(project.lock(), [TEST]);
+  assert.deepEqual(project.locks().tampered, []);
+  assert.equal(read(TEST), "fixed by hand");
+});
+
+test("discard unlocks and deletes test files", () => {
+  project.lock();
   project.discard([TEST]);
   assert.deepEqual(project.locks().locked, []);
   assert.equal(existsSync(join(root, TEST)), false);
+});
+
+test("verify reports success, failure and the end of the output", async () => {
+  assert.deepEqual(await project.verify(), { ok: true, output: "" });
+  writeFileSync(join(root, "werkstatt.json"), JSON.stringify({
+    specs: "docs/specs", acceptanceTests: "tests/acceptance", commands: { verify: "echo broken; exit 3" },
+  }));
+  const failed = await Project.load(root).verify();
+  assert.equal(failed.ok, false);
+  assert.match(failed.output, /broken/);
+});
+
+test("a run stops before any session if locked tests were changed", async () => {
+  project.git("init", "-q");
+  project.lock();
+  write(TEST, "weakened");
+  project.git("add", "-A");
+  project.git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init");
+  const record = await run(project, "001", { maxAttempts: 1, allowDirty: false, maxTurns: 1 });
+  assert.equal(record.outcome, "aborted");
+  assert.match(record.reason, /changed since they were locked:\n  tests\/acceptance\/Spec001FooTest.java/);
+  assert.deepEqual(record.phases, []);
 });
 
 test("decisions are appended under a Decisions heading, later ones are skipped", () => {

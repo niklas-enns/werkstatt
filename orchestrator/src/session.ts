@@ -1,5 +1,7 @@
 import { query, type Options, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
-import { PLUGIN_ROOT, type Project } from "./project.js";
+import { loadAgents } from "./agents.js";
+import { guard } from "./guard.js";
+import type { Project } from "./project.js";
 
 export interface SessionOptions {
   model?: string;
@@ -9,11 +11,11 @@ export interface SessionOptions {
 
 /** What distinguishes the phases: who works, with which tools, in which mode. */
 export interface Role {
-  /** Plugin agent for the main thread; its definition in agents/ says how the phase works. */
+  /** Agent for the main thread; its definition in agents/ says how the phase works. */
   agent: string;
   tools: string[];
-  /** Value of WERKSTATT_PHASE, read by the stop hook. */
-  phase?: string;
+  /** The session may only end once verify is green. */
+  verifyGate?: boolean;
   /** JSON schema the session's final answer must match. */
   outputSchema?: Record<string, unknown>;
 }
@@ -42,15 +44,15 @@ function writing(project: Project): string[] {
 }
 
 export function testWriter(project: Project, outputSchema: Record<string, unknown>): Role {
-  return { agent: "werkstatt:test-writer", tools: writing(project), outputSchema };
+  return { agent: "test-writer", tools: writing(project), outputSchema };
 }
 
 export function implementer(project: Project): Role {
-  return { agent: "werkstatt:implementer", tools: writing(project), phase: "implement" };
+  return { agent: "implementer", tools: writing(project), verifyGate: true };
 }
 
 export function reviewer(outputSchema: Record<string, unknown>): Role {
-  return { agent: "werkstatt:reviewer", tools: READ_ONLY, outputSchema };
+  return { agent: "reviewer", tools: READ_ONLY, outputSchema };
 }
 
 export async function runSession(
@@ -69,12 +71,12 @@ export async function runSession(
   const sdkOptions: Options = {
     cwd: project.root,
     agent: role.agent,
-    plugins: [{ type: "local", path: PLUGIN_ROOT }],
+    agents: loadAgents(),
+    hooks: guard(project.root, { stop: true, verifyGate: role.verifyGate }, (text) => log(label, `[guard] ${text}`)),
     settingSources: ["project", "local"],
     // Nobody is there to answer a permission prompt: anything not listed is denied.
     permissionMode: "dontAsk",
     allowedTools: role.tools,
-    env: { ...process.env, ...(role.phase ? { WERKSTATT_PHASE: role.phase } : {}) },
     model: options.model,
     maxBudgetUsd: options.maxBudgetUsd,
     maxTurns: options.maxTurns,
@@ -105,9 +107,6 @@ function report(label: string, message: SDKMessage) {
       if (block.type === "text" && block.text.trim()) log(label, block.text.trim().split("\n")[0]);
       if (block.type === "tool_use") log(label, `→ ${block.name} ${summarize(block.input)}`);
     }
-  }
-  if (message.type === "system" && message.subtype === "hook_response" && message.output.includes("werkstatt")) {
-    log(label, `[hook ${message.hook_event}] ${message.output.trim().slice(0, 200)}`);
   }
 }
 

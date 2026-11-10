@@ -2,7 +2,7 @@ import type { CanUseTool } from "@anthropic-ai/claude-agent-sdk";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { converse, inside, targetPath, type ConversationResult } from "./conversation.js";
-import { PLUGIN_ROOT, type Project } from "./project.js";
+import { PACKAGE_ROOT, type Project } from "./project.js";
 import type { SessionOptions } from "./session.js";
 import { askQuestions, type Question } from "./terminal.js";
 
@@ -11,7 +11,7 @@ export interface InterviewResult extends ConversationResult {
   specs: string[];
 }
 
-const TEMPLATE = join(PLUGIN_ROOT, "templates", "spec-template.md");
+const TEMPLATE = join(PACKAGE_ROOT, "templates", "spec-template.md");
 
 /**
  * Interviews the user in the terminal until a spec is written.
@@ -19,7 +19,7 @@ const TEMPLATE = join(PLUGIN_ROOT, "templates", "spec-template.md");
  */
 export async function interview(project: Project, idea: string, options: SessionOptions): Promise<InterviewResult> {
   const before = specFiles(project);
-  const result = await converse(project.root, "werkstatt:interviewer", interviewPrompt(project, idea), decide(project), options);
+  const result = await converse(project.root, "interviewer", interviewPrompt(project, idea), decide(project), options);
   const after = specFiles(project);
   const specs = [...after].filter(([path, mtime]) => before.get(path) !== mtime).map(([path]) => path).sort();
   return { ...result, specs };
