@@ -1,6 +1,6 @@
 {
   "name": "werkstatt-orchestrator",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Spec-driven development with coding agents: set up, specify, and implement specs behind locked acceptance tests and an independent review.",
   "type": "module",
   "bin": {

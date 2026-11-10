@@ -8,7 +8,7 @@ You decide *what* gets built. Agents build it.
 Locked acceptance tests and an independent review make sure that what comes out is what the spec says.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.0-orange.svg)](https://github.com/niklas-enns/werkstatt/releases)
+[![Version](https://img.shields.io/badge/version-0.2.0-orange.svg)](https://github.com/niklas-enns/werkstatt/releases)
 [![Claude Agent SDK](https://img.shields.io/badge/Claude-Agent%20SDK-d97757.svg)](https://code.claude.com/docs/en/agent-sdk)
 
 </div>
@@ -31,7 +31,8 @@ werkstatt is the harness around the agent that closes these gaps: spec first, te
 
 ```mermaid
 flowchart LR
-    idea([Idea]) --> interview["werkstatt spec"]
+    setup["werkstatt init"] --> idea([Idea])
+    idea --> interview["werkstatt spec"]
     interview --> spec[Spec with<br/>acceptance criteria]
     spec --> release{{You approve}}
     release --> run["werkstatt run"]
@@ -50,6 +51,7 @@ flowchart LR
     review -- passed --> done([Review the diff<br/>and commit])
 ```
 
+0. **Set up** – `werkstatt init` prepares the project once: it finds out stack, verify command and structure, asks about the rest, and writes `AGENTS.md` and `werkstatt.json`.
 1. **Specify** – `werkstatt spec` interviews you in the terminal: the **interviewer** asks about rules, edge cases, error cases and the interface until every acceptance criterion is unambiguously testable. It may only write Markdown in the spec directory – and never approve.
 2. **Approve** – Only you set a spec to `approved`.
 3. **Let it be implemented** – `werkstatt run` does the rest on its own:
@@ -103,6 +105,8 @@ werkstatt run 001
 
 ## The orchestrator in detail
 
+All commands work in the current directory; `--project <dir>` points them at another one.
+
 ```
 werkstatt init [description] [--budget <usd>] [--max-turns 150] [--model <id>]
 ```
@@ -121,7 +125,7 @@ werkstatt run <spec-id> [--attempts 2] [--budget <usd>] [--max-turns 150] [--mod
 
 | Step | What happens | Who checks |
 |---|---|---|
-| Preconditions | Spec is `approved`, working tree is clean | Orchestrator |
+| Preconditions | Spec is `approved`, working tree is clean, locked acceptance tests are unchanged | Orchestrator |
 | Acceptance tests | `test-writer` writes tests (file name contains `Spec<number>`) and reports which test checks which criterion – or stops if the spec isn't testable | Orchestrator: tests exist and are locked |
 | Implementation | `implementer` implements | Stop hook: `verify` green (sends it back up to three times) · Orchestrator: tests unchanged, `verify` green |
 | Review | `reviewer` delivers `PASSED` / `NEEDS_WORK`, findings and open questions | Orchestrator evaluates the structured verdict |
@@ -130,7 +134,7 @@ werkstatt run <spec-id> [--attempts 2] [--budget <usd>] [--max-turns 150] [--mod
 
 werkstatt never commits. Every run is logged to `.werkstatt/state/runs/` – phases, cost, turns and outcome as JSON, plus each review as a readable Markdown file.
 
-The agent sessions run without asking: file tools, the verify command and read-only shell and git commands are allowed – everything else is denied.
+The sessions of `run` don't ask you anything: file tools, the verify command and read-only shell and git commands are allowed – everything else is denied.
 
 ## The spec format
 
@@ -211,7 +215,9 @@ cd orchestrator && npm test
 
 ## Status
 
-werkstatt is an early experiment (v0.1). The workflow works end to end on a sample project, but interfaces and file formats may still change. Feedback and issues are welcome.
+werkstatt is an early experiment (v0.2). The workflow works end to end on a sample project, but interfaces and file formats may still change. Feedback and issues are welcome.
+
+**Upgrading from 0.1:** werkstatt is no longer a Claude Code plugin – `/werkstatt:project-init` and `/werkstatt:spec-interview` are now `werkstatt init` and `werkstatt spec`. Remove the old plugin with `/plugin uninstall werkstatt@werkstatt`, then pull and rebuild the orchestrator (`npm install && npm run build`). Existing locks in `.werkstatt/locks/` keep working.
 
 Planned: analysis of the run logs (cost, attempts, review findings across several runs).
 
