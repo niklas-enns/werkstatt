@@ -21,23 +21,22 @@ Locked acceptance tests and an independent review make sure that what comes out 
 
 Coding agents write code fast. Everything around it is the hard part:
 
-- **What exactly should be built?** Implicit knowledge, edge cases and business rules rarely make it into the ticket.
+- **What exactly should be built?** Edge cases and business rules rarely make it into the ticket.
 - **Is the result right?** An agent that writes its own tests likes to confirm itself – and when in doubt, it changes the test instead of the code.
 - **Who checks?** Humans can't keep up with reading generated code.
 
-werkstatt is the harness around the agent that closes these gaps: spec first, tests before code and locked against changes, deterministic checks outside the model, and a review with fresh eyes.
+werkstatt closes these gaps: spec first, tests before code and locked against changes, deterministic checks outside the model, and a review with fresh eyes.
 
 ## How it works
 
 ```mermaid
 flowchart LR
-    setup["werkstatt init"] --> idea([Idea])
-    idea --> interview["werkstatt spec"]
+    setup["werkstatt init"] --> interview["werkstatt spec"]
     interview --> spec[Spec with<br/>acceptance criteria]
     spec --> release{{You approve}}
-    release --> run["werkstatt run"]
+    release --> tests
 
-    subgraph run_box [Orchestrator · every phase its own agent session]
+    subgraph run_box ["werkstatt run · every phase its own agent session"]
         direction LR
         tests[test-writer<br/>derives tests] --> lock[(Tests<br/>locked)]
         lock --> impl[implementer<br/>implements]
@@ -47,46 +46,25 @@ flowchart LR
         review -- needs work --> impl
     end
 
-    run --> tests
-    review -- passed --> done([Review the diff<br/>and commit])
+    review -- passed --> done([You review<br/>and commit])
 ```
 
-0. **Set up** – `werkstatt init` prepares the project once: it finds out stack, verify command and structure, asks about the rest, and writes `AGENTS.md` and `werkstatt.json`.
-1. **Specify** – `werkstatt spec` interviews you in the terminal: the **interviewer** asks about rules, edge cases, error cases and the interface until every acceptance criterion is unambiguously testable. It may only write Markdown in the spec directory – and never approve.
-2. **Approve** – Only you set a spec to `approved`.
-3. **Let it be implemented** – `werkstatt run` does the rest on its own:
-   - The **test-writer** turns each acceptance criterion into an executable test. The tests are **locked**.
-   - The **implementer** implements. It can't stop until `verify` is green – and it can't change the locked tests.
-   - The **reviewer** checks the change independently against the spec and conventions. If something is wrong, its findings go into another round.
-4. **Decide** – If the spec leaves something open, werkstatt asks you in the terminal at the end. Your decision is recorded in the spec.
+1. **`werkstatt init`** – the *initializer* sets up the project once: it finds out stack, verify command and structure, asks about the rest, and writes `AGENTS.md` and `werkstatt.json`.
+2. **`werkstatt spec`** – the *interviewer* asks about rules, edge cases and the interface until every acceptance criterion is testable. It can only write specs, never approve them.
+3. **You approve** – only you set a spec to `status: approved`.
+4. **`werkstatt run`** – the *test-writer* turns each criterion into a test, which is then locked. The *implementer* works until `verify` is green, without being able to touch the locked tests. The *reviewer* checks the result against the spec; its findings go into another round. Questions the spec leaves open are asked in the terminal at the end, and your answers are recorded in the spec.
 
-Everything werkstatt and its agents produce is in English – the interview, specs, tests and reviews.
+### Why a CLI and not Claude Code?
 
-## Why a CLI and not Claude Code?
+You don't ask Claude Code to follow a process – `werkstatt` runs the process and hands each step to an agent. The guardrails only hold if the model doesn't control them:
 
-With werkstatt you don't work in Claude Code and ask it to follow a process. You run `werkstatt`, and it hands each step to an agent. That's deliberate: the guardrails only hold if the model doesn't control the process.
+- **The order is code.** Tests come before the implementation and the review before the end because the orchestrator runs them that way – no step can be skipped.
+- **Every phase is a fresh session.** The reviewer doesn't see how the implementer argued for its solution.
+- **Checks run outside the model.** Locks, the `verify` gate and the check for changed tests are TypeScript, not instructions an agent can talk itself out of.
 
-- **The order is code.** Tests come before the implementation and the review before the end because the orchestrator runs them in that order – not because a prompt asks for it, and without a way to skip a step.
-- **Every phase is a fresh session.** The reviewer doesn't see how the implementer argued for its solution. That independence is hard to get inside one conversation.
-- **Checks run outside the model.** Locked tests, the `verify` gate and the check for changed tests before `run` are TypeScript, not instructions an agent can talk itself out of.
-
-The price is a plainer interface than Claude Code's: the interview and `init` run in the terminal, without your usual Claude Code setup. You stay in control where it matters – only you approve a spec, and only you commit.
-
-## What's inside
-
-| Component | Kind | Job |
-|---|---|---|
-| `initializer` | Agent | Sets up a project: `AGENTS.md`, `werkstatt.json`, directories for specs and acceptance tests – in an empty directory also the project skeleton |
-| `interviewer` | Agent | Turns a rough idea into a testable spec by interviewing you |
-| `test-writer` | Agent | Derives black-box acceptance tests from the spec, one per criterion |
-| `implementer` | Agent | Implements the spec until the locked tests are green |
-| `reviewer` | Agent | Checks the implementation against the spec and `AGENTS.md`, with a structured verdict |
-| Guard | Hooks in every session | Lock acceptance tests against changes, require a green `verify` from the implementer |
-| `werkstatt` | Orchestrator (TypeScript, [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk)) | The one entry point: `init` and `spec` talk with you in the terminal, `run` drives the phases, checks for itself, retries, asks, keeps a log |
+The price is a plainer interface: the interview runs in the terminal, without your usual Claude Code setup.
 
 ## Quick start
-
-### 1. Install werkstatt
 
 ```bash
 git clone https://github.com/niklas-enns/werkstatt.git
@@ -94,74 +72,47 @@ cd werkstatt/orchestrator
 npm install && npm run build && npm link
 ```
 
-The `werkstatt` command is then available everywhere. It uses your Claude Code login or `ANTHROPIC_API_KEY` and loads the agents from its own checkout.
-
-### 2. Get going
-
-Everything happens in a terminal, in the target project:
+`werkstatt` uses your Claude Code login or `ANTHROPIC_API_KEY`. Then, in the target project:
 
 ```bash
 werkstatt init
 werkstatt spec "A person creates a poll to find a date, with several proposed dates"
-```
-
-`init` and `spec` talk with you: answer a question with an option's number or in your own words, and when the agent hands over, reply to ask for changes or press Enter to finish. `init` shows you every shell command that changes something (generators, `git init`, the verify command) before it runs.
-
-Read the spec, set `status: approved` in its front matter, commit. Then:
-
-```bash
+# read the spec, set status: approved, commit
 werkstatt run 001
 ```
 
-## The orchestrator in detail
+## Commands
 
-All commands work in the current directory; `--project <dir>` points them at another one.
+All commands work in the current directory; `--project <dir>` points them at another one. `init`, `spec` and `run` also take `--budget <usd>`, `--max-turns <n>` (default 150) and `--model <id>`.
 
-```
-werkstatt init [description] [--budget <usd>] [--max-turns 150] [--model <id>]
-```
+**`werkstatt init [description]`** – In an empty directory it first generates a skeleton with the stack's official generator. It never replaces an existing file; shell commands that change something need your approval (`y`, `a` for always, `n` or a reason). Afterwards werkstatt checks the setup, runs `verify` and offers to commit.
 
-The initializer finds out stack, verify command and structure, asks about what it can't find out, and writes `AGENTS.md`, `CLAUDE.md`, `werkstatt.json` and the directories – in an empty directory it first generates a skeleton with the stack's official generator. It may write inside the project but never replace an existing file; read-only shell commands run directly, every other one needs your approval (`y`, `a` for always, `n` or a reason). Afterwards werkstatt checks the setup itself, runs `verify`, shows you the uncommitted changes and asks whether to commit them – only you decide, and only in the project's own repository.
+**`werkstatt spec <idea>`** – Answer a question with an option's number or in your own words; when the interviewer hands over, ask for changes or press Enter to finish. A write that sets `status: approved` is denied.
 
-```
-werkstatt spec <idea> [--budget <usd>] [--max-turns 150] [--model <id>]
-```
-
-The interview is one agent session that you take turns with. werkstatt shows the interviewer's questions in the terminal and decides its tool calls itself: reading is allowed, writing only to Markdown files in the spec directory, and a write that sets `status: approved` is denied. At the end it lists the specs that were written or changed.
-
-```
-werkstatt run <spec-id> [--attempts 2] [--budget <usd>] [--max-turns 150] [--model <id>] [--allow-dirty]
-```
+**`werkstatt run <spec-id> [--attempts 2] [--allow-dirty]`**
 
 | Step | What happens | Who checks |
 |---|---|---|
-| Preconditions | Spec is `approved`, working tree is clean, locked acceptance tests are unchanged | Orchestrator |
-| Acceptance tests | `test-writer` writes tests (file name contains `Spec<number>`) and reports which test checks which criterion – or stops if the spec isn't testable | Orchestrator: tests exist and are locked |
-| Implementation | `implementer` implements | Stop hook: `verify` green (sends it back up to three times) · Orchestrator: tests unchanged, `verify` green |
-| Review | `reviewer` delivers `PASSED` / `NEEDS_WORK`, findings and open questions | Orchestrator evaluates the structured verdict |
-| Rework | Blocking findings become the task for the next round | until `--attempts` is reached |
-| Open questions | In the terminal: **keep**, **decide differently** or **later** – decisions are recorded in the spec's "Decisions" section | you |
+| Preconditions | Spec is `approved`, working tree is clean, locked tests are unchanged | Orchestrator |
+| Acceptance tests | `test-writer` writes tests (file name contains `Spec<number>`), maps them to criteria – or stops if the spec isn't testable. Skipped if the spec already has tests | Orchestrator: tests exist and are locked |
+| Implementation | `implementer` implements | Stop hook and orchestrator: `verify` green, tests unchanged |
+| Review | `reviewer` delivers `PASSED` / `NEEDS_WORK`, findings and open questions | Orchestrator evaluates the verdict |
+| Rework | Blocking findings become the next round's task | until `--attempts` is reached |
+| Open questions | **keep**, **decide differently** or **later** – recorded under "Decisions" in the spec | you |
 
-`run` never commits. Every run is logged to `.werkstatt/state/runs/` – phases, cost, turns and outcome as JSON, plus each review as a readable Markdown file.
+`run` never commits and doesn't ask anything during its sessions: file tools, `verify` and read-only shell and git commands are allowed, everything else is denied. Each run is logged to `.werkstatt/state/runs/` (phases, cost, turns, outcome, and each review as Markdown).
 
-The sessions of `run` don't ask you anything: file tools, the verify command and read-only shell and git commands are allowed – everything else is denied.
+**`werkstatt status`** / **`werkstatt unlock <pattern>`** – see below.
 
 ## The spec format
 
-A spec is a Markdown file `docs/specs/NNN-<slug>.md` with front matter (`id`, `title`, `status: draft | approved`, `depends-on`) and the sections Goal, Terms, Rules, Interface, Acceptance criteria, Out of scope and Open questions. Each acceptance criterion has an ID (`AC-1`, …) and the form **Given** / **When** / **Then** with concrete values. The template is [`templates/spec-template.md`](templates/spec-template.md).
+A spec is a Markdown file `docs/specs/NNN-<slug>.md` with front matter (`id`, `title`, `status`, `depends-on`) and the sections Goal, Terms, Rules, Interface, Acceptance criteria, Out of scope and Open questions – see [`templates/spec-template.md`](templates/spec-template.md). Each criterion has an ID (`AC-1`, …) and the form **Given** / **When** / **Then** with concrete values.
 
-The format is werkstatt's own, not a formal standard. The acceptance criteria borrow the Given / When / Then style from BDD, but they aren't Gherkin: there are no `.feature` files, and nothing runs them through Cucumber. The test-writer turns each criterion into a test in the project's own test framework, so the spec only has to be unambiguous, not executable. And no single standard covers everything a spec here needs – goal, terms, rules, interface and acceptance criteria in one file that the orchestrator can read.
+The format is werkstatt's own, not a formal standard. The criteria borrow Given / When / Then from BDD but aren't Gherkin: the test-writer turns them into tests in the project's own framework, so the spec only has to be unambiguous, not executable.
 
-## Protecting the acceptance tests
+## Locked acceptance tests
 
-werkstatt registers its hooks in every agent session it starts, as soon as the project has a `werkstatt.json`:
-
-| Hook | Sessions | Effect |
-|---|---|---|
-| `PreToolUse` | all | Denies writes to locked acceptance tests, `.werkstatt/` and `werkstatt.json` – including obvious detours through the shell (`rm`, `sed -i`, redirections …) |
-| `Stop` | `run` | Restores changed locked tests from the locked copy and locks new test files. In the implementation phase, `verify` must also be green – after three rejections the session may end anyway, since the orchestrator checks for itself |
-
-Between sessions, `werkstatt run` checks before it starts: if a locked test was changed since it was locked, it stops and names the file.
+In every session, a `PreToolUse` hook denies writes to locked tests, `.werkstatt/` and `werkstatt.json` – including obvious shell detours (`rm`, `sed -i`, redirections …). In `run`, a `Stop` hook also restores changed locked tests and locks new ones, and in the implementation phase it requires a green `verify` (after three rejections it gives in – the orchestrator checks anyway).
 
 Only humans can unlock:
 
@@ -170,17 +121,14 @@ werkstatt status              # show locked acceptance tests
 werkstatt unlock Spec001      # unlock tests whose path contains "Spec001"
 ```
 
-Good to know:
+- **To fix a test:** unlock, change it, run again – `run` locks it with the new content. If you change a locked test without unlocking, `run` refuses to start.
+- **To have tests derived again:** unlock *and* delete them.
 
-- **Unlock first, then change.** If you change a locked test by hand, the next `werkstatt run` refuses to start until you unlock it or undo the change.
-- **Unlocking is temporary.** After `unlock`, the next `werkstatt run` locks the test again with its then-current content. That's how you fix a wrong test: unlock, change, carry on.
-- **To have tests derived again:** unlock *and* delete the files. As long as a spec has tests, `werkstatt run` skips the test-writer phase.
-
-`.werkstatt/locks/` belongs in the repository, so the locks apply to everyone. `.werkstatt/state/` ignores itself.
+Commit `.werkstatt/locks/` so the locks apply to everyone; `.werkstatt/state/` ignores itself.
 
 ## Configuration
 
-`werkstatt init` creates a `werkstatt.json` in the project:
+`werkstatt.json`, written by `init`:
 
 ```json
 {
@@ -198,40 +146,20 @@ Context and conventions for the agents live in the project's `AGENTS.md`.
 
 ## Requirements and limits
 
-**Requirements**
-- A Claude login ([Claude Code](https://code.claude.com)) or `ANTHROPIC_API_KEY`
-- Node.js ≥ 20, git
+- Node.js ≥ 20, git, and a Claude login or `ANTHROPIC_API_KEY`
 - In the target project: **one** command that builds and runs all tests
 
-**A good fit** for backend and service projects whose behaviour can be tested from the outside through an interface (HTTP, CLI, public API).
+werkstatt fits backend and service projects whose behaviour can be tested from the outside (HTTP, CLI, public API). It fits worse for UI-heavy applications, data analysis or infrastructure code. It works through one spec at a time, and decisions changed after the review are implemented and reviewed but not backed by new acceptance tests.
 
-**Not a good fit yet** for
-- UI-heavy applications, data analysis or infrastructure code – the "acceptance test against an interface" pattern fits worse there
-- several specs in progress at once – werkstatt works through one spec after the other
-- decisions changed after the review: they are implemented and reviewed, but not backed by new acceptance tests
+## Development
 
-## Project structure
-
-```
-werkstatt/
-├── agents/             initializer, interviewer, test-writer, implementer, reviewer
-├── templates/          templates for spec, AGENTS.md and werkstatt.json
-└── orchestrator/       the werkstatt command (TypeScript, Claude Agent SDK), incl. the guard hooks
-```
-
-Run the tests:
-
-```bash
-cd orchestrator && npm test
-```
+`agents/` holds the agent prompts, `templates/` the templates for spec, `AGENTS.md` and `werkstatt.json`, `orchestrator/` the `werkstatt` command. Tests: `cd orchestrator && npm test`.
 
 ## Status
 
-werkstatt is an early experiment (v0.2). The workflow works end to end on a sample project, but interfaces and file formats may still change. Feedback and issues are welcome.
+An early experiment (v0.2): the workflow works end to end on a sample project, but interfaces and file formats may still change. Feedback and issues are welcome.
 
-**Upgrading from 0.1:** werkstatt is no longer a Claude Code plugin – `/werkstatt:project-init` and `/werkstatt:spec-interview` are now `werkstatt init` and `werkstatt spec`. Remove the old plugin with `/plugin uninstall werkstatt@werkstatt`, then pull and rebuild the orchestrator (`npm install && npm run build`). Existing locks in `.werkstatt/locks/` keep working.
-
-Planned: analysis of the run logs (cost, attempts, review findings across several runs).
+**Upgrading from 0.1:** the Claude Code plugin is gone – `/werkstatt:project-init` and `/werkstatt:spec-interview` are now `werkstatt init` and `werkstatt spec`. Run `/plugin uninstall werkstatt@werkstatt`, then pull and rebuild the orchestrator. Existing locks keep working.
 
 ## License
 
