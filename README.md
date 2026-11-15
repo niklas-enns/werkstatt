@@ -8,7 +8,7 @@ You decide *what* gets built. Agents build it.
 Locked acceptance tests and an independent review make sure that what comes out is what the spec says.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.0-orange.svg)](https://github.com/niklas-enns/werkstatt/releases)
+[![Version](https://img.shields.io/badge/version-0.2.1-orange.svg)](https://github.com/niklas-enns/werkstatt/releases)
 [![Claude Agent SDK](https://img.shields.io/badge/Claude-Agent%20SDK-d97757.svg)](https://code.claude.com/docs/en/agent-sdk)
 
 </div>
