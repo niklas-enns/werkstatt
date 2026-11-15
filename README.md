@@ -30,23 +30,20 @@ werkstatt closes these gaps: spec first, tests before code and locked against ch
 ## How it works
 
 ```mermaid
-flowchart LR
-    setup["werkstatt init"] --> interview["werkstatt spec"]
-    interview --> spec[Spec with<br/>acceptance criteria]
-    spec --> release{{You approve}}
-    release --> tests
+flowchart TD
+    init["werkstatt init"] --> spec["werkstatt spec"]
+    spec --> approve{{You approve the spec}}
+    approve --> tests
 
-    subgraph run_box ["werkstatt run · every phase its own agent session"]
-        direction LR
-        tests[test-writer<br/>derives tests] --> lock[(Tests<br/>locked)]
-        lock --> impl[implementer<br/>implements]
-        impl --> verify{verify<br/>green?}
+    subgraph run ["werkstatt run"]
+        tests["test-writer derives tests · locked"] --> impl[implementer]
+        impl --> verify{verify green?}
         verify -- no --> impl
-        verify -- yes --> review[reviewer<br/>checks against spec]
+        verify -- yes --> review[reviewer checks against spec]
         review -- needs work --> impl
     end
 
-    review -- passed --> done([You review<br/>and commit])
+    review -- passed --> done([You review and commit])
 ```
 
 1. **`werkstatt init`** – the *initializer* sets up the project once: it finds out stack, verify command and structure, asks about the rest, and writes `AGENTS.md` and `werkstatt.json`.
