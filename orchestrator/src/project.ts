@@ -1,6 +1,6 @@
 import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -205,8 +205,24 @@ export class Project {
     return this.git("rev-parse", "HEAD");
   }
 
+  /** True if the root is the top of its own git repository – not a folder inside another one. */
+  isRepository(): boolean {
+    try {
+      return realpathSync(this.git("rev-parse", "--show-toplevel")) === realpathSync(this.root);
+    } catch {
+      return false;
+    }
+  }
+
+  /** Commits all changes; returns the short hash. */
+  commitAll(message: string): string {
+    this.git("add", "-A");
+    this.git("commit", "-q", "-m", message);
+    return this.git("rev-parse", "--short", "HEAD");
+  }
+
   git(...args: string[]): string {
-    return execFileSync("git", args, { cwd: this.root, encoding: "utf8" }).trimEnd();
+    return execFileSync("git", args, { cwd: this.root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trimEnd();
   }
 }
 

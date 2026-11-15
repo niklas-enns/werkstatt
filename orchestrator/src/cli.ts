@@ -102,11 +102,36 @@ async function setUp(root: string, description: string, options: SessionOptions)
     console.log(`\nverify is ${result.verify.ok ? "green" : "RED"}.`);
     if (!result.verify.ok) console.log(result.verify.output.split("\n").slice(-20).join("\n"));
   }
-  console.log(`
+  const committed = await offerCommit(Project.load(root));
+  closeTerminal();
+  console.log(committed ? `
+Next step: werkstatt spec "<your first feature>"` : `
 Next steps:
   1. Review the changes and commit.
   2. werkstatt spec "<your first feature>"`);
   process.exit(result.outcome === "success" && result.verify?.ok ? 0 : 1);
+}
+
+/** Shows what the setup changed and commits it if the user wants to; true if nothing is left to commit. */
+async function offerCommit(project: Project): Promise<boolean> {
+  if (!project.isRepository()) {
+    console.log("\nThe project is not the top of its own git repository – not offering to commit.");
+    return false;
+  }
+  const files = project.dirtyFiles().map((line) => line.slice(3));
+  if (!files.length) return true;
+  console.log(`\nUncommitted changes (${files.length}):`);
+  for (const file of files.slice(0, 30)) console.log(`  ${file}`);
+  if (files.length > 30) console.log(`  … and ${files.length - 30} more`);
+  const answer = (await prompt("Commit them now? [y/N] > ")).toLowerCase();
+  if (answer !== "y" && answer !== "yes") return false;
+  try {
+    console.log(`Committed: ${project.commitAll("Set up project with werkstatt")}`);
+    return true;
+  } catch (error) {
+    console.log(`Commit failed – commit by hand:\n${error instanceof Error ? error.message : error}`);
+    return false;
+  }
 }
 
 async function spec(project: Project, idea: string, options: SessionOptions) {

@@ -62,6 +62,16 @@ flowchart LR
 
 Everything werkstatt and its agents produce is in English – the interview, specs, tests and reviews.
 
+## Why a CLI and not Claude Code?
+
+With werkstatt you don't work in Claude Code and ask it to follow a process. You run `werkstatt`, and it hands each step to an agent. That's deliberate: the guardrails only hold if the model doesn't control the process.
+
+- **The order is code.** Tests come before the implementation and the review before the end because the orchestrator runs them in that order – not because a prompt asks for it, and without a way to skip a step.
+- **Every phase is a fresh session.** The reviewer doesn't see how the implementer argued for its solution. That independence is hard to get inside one conversation.
+- **Checks run outside the model.** Locked tests, the `verify` gate and the check for changed tests before `run` are TypeScript, not instructions an agent can talk itself out of.
+
+The price is a plainer interface than Claude Code's: the interview and `init` run in the terminal, without your usual Claude Code setup. You stay in control where it matters – only you approve a spec, and only you commit.
+
 ## What's inside
 
 | Component | Kind | Job |
@@ -111,7 +121,7 @@ All commands work in the current directory; `--project <dir>` points them at ano
 werkstatt init [description] [--budget <usd>] [--max-turns 150] [--model <id>]
 ```
 
-The initializer finds out stack, verify command and structure, asks about what it can't find out, and writes `AGENTS.md`, `CLAUDE.md`, `werkstatt.json` and the directories – in an empty directory it first generates a skeleton with the stack's official generator. It may write inside the project but never replace an existing file; read-only shell commands run directly, every other one needs your approval (`y`, `a` for always, `n` or a reason). Afterwards werkstatt checks the setup itself and runs `verify`.
+The initializer finds out stack, verify command and structure, asks about what it can't find out, and writes `AGENTS.md`, `CLAUDE.md`, `werkstatt.json` and the directories – in an empty directory it first generates a skeleton with the stack's official generator. It may write inside the project but never replace an existing file; read-only shell commands run directly, every other one needs your approval (`y`, `a` for always, `n` or a reason). Afterwards werkstatt checks the setup itself, runs `verify`, shows you the uncommitted changes and asks whether to commit them – only you decide, and only in the project's own repository.
 
 ```
 werkstatt spec <idea> [--budget <usd>] [--max-turns 150] [--model <id>]
@@ -132,13 +142,15 @@ werkstatt run <spec-id> [--attempts 2] [--budget <usd>] [--max-turns 150] [--mod
 | Rework | Blocking findings become the task for the next round | until `--attempts` is reached |
 | Open questions | In the terminal: **keep**, **decide differently** or **later** – decisions are recorded in the spec's "Decisions" section | you |
 
-werkstatt never commits. Every run is logged to `.werkstatt/state/runs/` – phases, cost, turns and outcome as JSON, plus each review as a readable Markdown file.
+`run` never commits. Every run is logged to `.werkstatt/state/runs/` – phases, cost, turns and outcome as JSON, plus each review as a readable Markdown file.
 
 The sessions of `run` don't ask you anything: file tools, the verify command and read-only shell and git commands are allowed – everything else is denied.
 
 ## The spec format
 
 A spec is a Markdown file `docs/specs/NNN-<slug>.md` with front matter (`id`, `title`, `status: draft | approved`, `depends-on`) and the sections Goal, Terms, Rules, Interface, Acceptance criteria, Out of scope and Open questions. Each acceptance criterion has an ID (`AC-1`, …) and the form **Given** / **When** / **Then** with concrete values. The template is [`templates/spec-template.md`](templates/spec-template.md).
+
+The format is werkstatt's own, not a formal standard. The acceptance criteria borrow the Given / When / Then style from BDD, but they aren't Gherkin: there are no `.feature` files, and nothing runs them through Cucumber. The test-writer turns each criterion into a test in the project's own test framework, so the spec only has to be unambiguous, not executable. And no single standard covers everything a spec here needs – goal, terms, rules, interface and acceptance criteria in one file that the orchestrator can read.
 
 ## Protecting the acceptance tests
 

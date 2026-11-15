@@ -108,6 +108,19 @@ test("verify reports success, failure and the end of the output", async () => {
   assert.match(failed.output, /broken/);
 });
 
+test("only the top of its own repository counts as a repository, and commitAll commits everything", () => {
+  assert.equal(project.isRepository(), false);
+  project.git("init", "-q");
+  project.git("config", "user.name", "t");
+  project.git("config", "user.email", "t@t");
+  assert.equal(project.isRepository(), true);
+  write("sub/werkstatt.json", "{}");
+  assert.equal(new Project(join(root, "sub"), project.config).isRepository(), false);
+  assert.match(project.commitAll("Set up"), /^[0-9a-f]{7,}$/);
+  assert.deepEqual(project.dirtyFiles(), []);
+  assert.equal(project.git("log", "--format=%s"), "Set up");
+});
+
 test("a run stops before any session if locked tests were changed", async () => {
   project.git("init", "-q");
   project.lock();
